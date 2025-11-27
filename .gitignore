@@ -14,10 +14,11 @@ dist/
 # Compiled binaries (keep source, not compiled)
 dialog-cli/dialog-cli
 
-# App bundle (built artifact)
-Speak MCP.app/
 
 # Generated icons (keep SVG source)
 *.icns
 icon.iconset/
 icon-v*.svg
+
+# App bundle (distributed via GitHub Releases)
+Speak MCP.app/

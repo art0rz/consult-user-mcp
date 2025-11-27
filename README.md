@@ -4,42 +4,30 @@ Native macOS dialog system for MCP (Model Context Protocol) servers.
 
 ## Install
 
-### Option 1: App Bundle (Recommended)
-
-```bash
-pnpm install
-pnpm build
-cp -r "Speak MCP.app" /Applications/
-```
-
-Then launch **Speak MCP** from Applications. A menu bar icon will appear.
-
-### Option 2: MCP Server Only
-
-Add to your Claude Code MCP config:
+1. Download **Speak MCP.app.zip** from [Releases](../../releases)
+2. Unzip and drag to `/Applications`
+3. Launch it - a menu bar icon appears
+4. Add the MCP server to Claude Code:
 
 ```json
 {
   "mcpServers": {
     "speak": {
       "command": "node",
-      "args": ["/path/to/speak/mcp-server/dist/index.js"]
+      "args": ["/Applications/Speak MCP.app/Contents/Resources/mcp-server/dist/index.js"]
     }
   }
 }
 ```
 
-## Build
+## Build from Source
 
 ```bash
 pnpm install
 pnpm build
 ```
 
-This builds:
-- `dialog-cli/dialog-cli` - Native dialog binary
-- `mcp-server/dist/` - MCP server
-- `Speak MCP.app` - Menu bar settings app
+Creates `Speak MCP.app` in project root.
 
 ## Structure
 

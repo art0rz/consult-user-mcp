@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
 import type { DialogProvider } from "./interface.js";
 import type {
   ConfirmOptions,
@@ -20,8 +21,20 @@ const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// dialog-cli is in the shared location: ../../../dialog-cli/dialog-cli
-const CLI_PATH = join(__dirname, "..", "..", "..", "dialog-cli", "dialog-cli");
+
+function findDialogCli(): string {
+  // When inside app bundle: mcp-server/dist/providers -> ../dialog-cli
+  const appBundlePath = join(__dirname, "..", "..", "dialog-cli", "dialog-cli");
+  if (existsSync(appBundlePath)) return appBundlePath;
+
+  // Dev: mcp-server/dist/providers -> ../../../dialog-cli
+  const devPath = join(__dirname, "..", "..", "..", "dialog-cli", "dialog-cli");
+  if (existsSync(devPath)) return devPath;
+
+  return devPath; // fallback
+}
+
+const CLI_PATH = findDialogCli();
 
 /**
  * Swift-based native dialog provider for macOS.
