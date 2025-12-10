@@ -42,9 +42,11 @@ struct ConfirmRequest: Codable {
 }
 
 struct ConfirmResponse: Codable {
+    let dialogType: String
     let confirmed: Bool
     let cancelled: Bool
-    let response: String?
+    let dismissed: Bool
+    let answer: String?
     let comment: String?
 }
 
@@ -58,8 +60,10 @@ struct ChooseRequest: Codable {
 }
 
 struct ChoiceResponse: Codable {
-    let selected: StringOrStrings?
+    let dialogType: String
+    let answer: StringOrStrings?
     let cancelled: Bool
+    let dismissed: Bool
     let description: String?
     let descriptions: [String?]?
     let comment: String?
@@ -74,8 +78,10 @@ struct TextInputRequest: Codable {
 }
 
 struct TextInputResponse: Codable {
-    let text: String?
+    let dialogType: String
+    let answer: String?
     let cancelled: Bool
+    let dismissed: Bool
     let comment: String?
 }
 
@@ -87,6 +93,7 @@ struct NotifyRequest: Codable {
 }
 
 struct NotifyResponse: Codable {
+    let dialogType: String
     let success: Bool
 }
 
@@ -112,6 +119,7 @@ struct SpeakRequest: Codable {
 }
 
 struct SpeakResponse: Codable {
+    let dialogType: String
     let success: Bool
 }
 
@@ -136,8 +144,10 @@ struct QuestionsRequest: Codable {
 }
 
 struct QuestionsResponse: Codable {
+    let dialogType: String
     let answers: [String: StringOrStrings]
     let cancelled: Bool
+    let dismissed: Bool
     let completedCount: Int
 }
 
@@ -289,6 +299,7 @@ struct SwiftUIChoiceCard: View {
             )
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .onHover { hovering in
             if reduceMotion {
                 isHovered = hovering
@@ -311,35 +322,44 @@ struct SwiftUIModernButton: View {
     let isPrimary: Bool
     let isDestructive: Bool
     let isDisabled: Bool
+    let showReturnHint: Bool
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isHovered = false
     @State private var isPressed = false
 
-    init(title: String, isPrimary: Bool = false, isDestructive: Bool = false, isDisabled: Bool = false, action: @escaping () -> Void) {
+    init(title: String, isPrimary: Bool = false, isDestructive: Bool = false, isDisabled: Bool = false, showReturnHint: Bool = false, action: @escaping () -> Void) {
         self.title = title
         self.isPrimary = isPrimary
         self.isDestructive = isDestructive
         self.isDisabled = isDisabled
+        self.showReturnHint = showReturnHint
         self.action = action
     }
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 15, weight: isPrimary ? .semibold : .medium))
-                .foregroundColor(buttonTextColor)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(buttonFill)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(isPrimary ? Color.clear : Theme.Colors.border, lineWidth: 1)
-                )
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 15, weight: isPrimary ? .semibold : .medium))
+                    .foregroundColor(buttonTextColor)
+                if showReturnHint && isPrimary && !isDisabled {
+                    Image(systemName: "return")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(buttonTextColor.opacity(0.7))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(buttonFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isPrimary ? Color.clear : Theme.Colors.border, lineWidth: 1)
+            )
         }
         .buttonStyle(PressableButtonStyle())
         .disabled(isDisabled)
@@ -737,7 +757,7 @@ struct SwiftUIChooseDialog: View {
     private var footerButtons: some View {
         HStack(spacing: 10) {
             SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-            SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, action: {
+            SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, showReturnHint: true, action: {
                 onComplete(selectedIndices)
             })
         }
@@ -748,7 +768,7 @@ struct SwiftUIChooseDialog: View {
     private func setupKeyboardNavigation() {
         keyboardMonitor = KeyboardNavigationMonitor { keyCode in
             switch keyCode {
-            case 125: // Down arrow
+            case 125, 48: // Down arrow or Tab
                 if focusedIndex < choices.count - 1 {
                     focusedIndex += 1
                 }
@@ -760,6 +780,11 @@ struct SwiftUIChooseDialog: View {
                 return true
             case 49: // Space - toggle selection
                 toggleSelection(at: focusedIndex)
+                return true
+            case 36: // Enter/Return - confirm if selection made
+                if !selectedIndices.isEmpty {
+                    onComplete(selectedIndices)
+                }
                 return true
             default:
                 return false
@@ -909,11 +934,11 @@ struct SwiftUIWizardDialog: View {
                 }
 
                 if isLast {
-                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, action: {
+                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
                         onComplete(answers)
                     })
                 } else {
-                    SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, action: goNext)
+                    SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
                 }
             }
             .padding(.horizontal, 20)
@@ -928,7 +953,7 @@ struct SwiftUIWizardDialog: View {
     private func setupKeyboardNavigation() {
         keyboardMonitor = KeyboardNavigationMonitor { keyCode in
             switch keyCode {
-            case 125: // Down arrow
+            case 125, 48: // Down arrow or Tab
                 if focusedOptionIndex < currentQuestion.options.count - 1 {
                     focusedOptionIndex += 1
                 }
@@ -941,8 +966,17 @@ struct SwiftUIWizardDialog: View {
             case 49: // Space - toggle selection
                 toggleSelection(at: focusedOptionIndex)
                 return true
+            case 36: // Enter/Return - next or complete
+                if !currentAnswer.isEmpty {
+                    if isLast {
+                        onComplete(answers)
+                    } else {
+                        goNext()
+                    }
+                }
+                return true
             case 124: // Right arrow - next question
-                if !isLast { goNext() }
+                if !isLast && !currentAnswer.isEmpty { goNext() }
                 return true
             case 123: // Left arrow - previous question
                 if !isFirst { goBack() }
@@ -985,6 +1019,7 @@ struct AccordionSection: View {
     @Binding var selectedIndices: Set<Int>
     @Binding var focusedIndex: Int
     let onToggle: () -> Void
+    let onAutoAdvance: () -> Void
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isHovered = false
@@ -1033,6 +1068,7 @@ struct AccordionSection: View {
                 )
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .onHover { hovering in
                 if reduceMotion {
                     isHovered = hovering
@@ -1074,6 +1110,10 @@ struct AccordionSection: View {
             }
         } else {
             selectedIndices = [index]
+            // Auto-advance to next section after single-select
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                onAutoAdvance()
+            }
         }
     }
 }
@@ -1132,7 +1172,8 @@ struct SwiftUIAccordionDialog: View {
                                     get: { expandedId == question.id ? focusedOptionIndex : -1 },
                                     set: { if expandedId == question.id { focusedOptionIndex = $0 } }
                                 ),
-                                onToggle: { toggleExpanded(question.id) }
+                                onToggle: { toggleExpanded(question.id) },
+                                onAutoAdvance: { advanceToNextSection(from: question.id) }
                             )
                             .id(question.id)
                         }
@@ -1151,7 +1192,7 @@ struct SwiftUIAccordionDialog: View {
             // Footer buttons
             HStack(spacing: 10) {
                 SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, action: {
+                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
                     onComplete(answers)
                 })
             }
@@ -1179,9 +1220,35 @@ struct SwiftUIAccordionDialog: View {
         }
     }
 
+    private func advanceToNextSection(from questionId: String) {
+        guard let currentIdx = questions.firstIndex(where: { $0.id == questionId }) else { return }
+        let nextIdx = currentIdx + 1
+        if nextIdx < questions.count {
+            if reduceMotion {
+                expandedId = questions[nextIdx].id
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    expandedId = questions[nextIdx].id
+                }
+            }
+        }
+        // If last question, stay expanded (user can click Done)
+    }
+
     private func setupKeyboardNavigation() {
         keyboardMonitor = KeyboardNavigationMonitor { keyCode in
-            guard let question = expandedQuestion else { return false }
+            guard let question = expandedQuestion else {
+                // No section expanded - Tab opens first, Enter completes if any answers
+                if keyCode == 48, let first = questions.first {
+                    toggleExpanded(first.id)
+                    return true
+                }
+                if keyCode == 36 && answeredCount > 0 {
+                    onComplete(answers)
+                    return true
+                }
+                return false
+            }
 
             switch keyCode {
             case 125: // Down arrow
@@ -1196,6 +1263,23 @@ struct SwiftUIAccordionDialog: View {
                 return true
             case 49: // Space - toggle selection
                 toggleSelection(for: question, at: focusedOptionIndex)
+                return true
+            case 36: // Enter/Return - advance or complete
+                // If current question is answered, advance to next
+                let currentAnswered = !(answers[question.id] ?? []).isEmpty
+                if currentAnswered {
+                    if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
+                        let nextIdx = idx + 1
+                        if nextIdx < questions.count {
+                            advanceToNextSection(from: question.id)
+                            return true
+                        }
+                    }
+                }
+                // Last section or not answered - complete if any answers
+                if answeredCount > 0 {
+                    onComplete(answers)
+                }
                 return true
             case 48: // Tab - next accordion section
                 if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
@@ -1332,7 +1416,7 @@ struct SwiftUIQuestionnaireDialog: View {
             // Footer buttons
             HStack(spacing: 10) {
                 SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, action: {
+                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
                     onComplete(answers)
                 })
             }
@@ -1387,6 +1471,11 @@ struct SwiftUIQuestionnaireDialog: View {
                 if focusedQuestionIndex < questions.count - 1 {
                     focusedQuestionIndex += 1
                     focusedOptionIndex = 0
+                }
+                return true
+            case 36: // Enter/Return - complete if any answers
+                if answeredCount > 0 {
+                    onComplete(answers)
                 }
                 return true
             default:
@@ -1886,11 +1975,11 @@ class DialogManager {
             confirmLabel: request.confirmLabel,
             cancelLabel: request.cancelLabel,
             onConfirm: {
-                result = ConfirmResponse(confirmed: true, cancelled: false, response: request.confirmLabel, comment: nil)
+                result = ConfirmResponse(dialogType: "confirm", confirmed: true, cancelled: false, dismissed: false, answer: request.confirmLabel, comment: nil)
                 NSApp.stopModal()
             },
             onCancel: {
-                result = ConfirmResponse(confirmed: false, cancelled: false, response: request.cancelLabel, comment: nil)
+                result = ConfirmResponse(dialogType: "confirm", confirmed: false, cancelled: false, dismissed: false, answer: request.cancelLabel, comment: nil)
                 NSApp.stopModal()
             }
         )
@@ -1907,7 +1996,7 @@ class DialogManager {
         NSApp.runModal(for: window)
         window.close()
 
-        return result ?? ConfirmResponse(confirmed: false, cancelled: true, response: nil, comment: nil)
+        return result ?? ConfirmResponse(dialogType: "confirm", confirmed: false, cancelled: true, dismissed: true, answer: nil, comment: nil)
     }
 
     // MARK: - Choose Dialog (SwiftUI)
@@ -1930,18 +2019,18 @@ class DialogManager {
             defaultSelection: request.defaultSelection,
             onComplete: { selectedIndices in
                 if selectedIndices.isEmpty {
-                    result = ChoiceResponse(selected: nil, cancelled: true, description: nil, descriptions: nil, comment: nil)
+                    result = ChoiceResponse(dialogType: "choose", answer: nil, cancelled: true, dismissed: false, description: nil, descriptions: nil, comment: nil)
                 } else if request.allowMultiple {
                     let selected = selectedIndices.sorted().map { request.choices[$0] }
                     let descs = selectedIndices.sorted().map { request.descriptions?[safe: $0] }
-                    result = ChoiceResponse(selected: .multiple(selected), cancelled: false, description: nil, descriptions: descs, comment: nil)
+                    result = ChoiceResponse(dialogType: "choose", answer: .multiple(selected), cancelled: false, dismissed: false, description: nil, descriptions: descs, comment: nil)
                 } else if let idx = selectedIndices.first {
-                    result = ChoiceResponse(selected: .single(request.choices[idx]), cancelled: false, description: request.descriptions?[safe: idx], descriptions: nil, comment: nil)
+                    result = ChoiceResponse(dialogType: "choose", answer: .single(request.choices[idx]), cancelled: false, dismissed: false, description: request.descriptions?[safe: idx], descriptions: nil, comment: nil)
                 }
                 NSApp.stopModal()
             },
             onCancel: {
-                result = ChoiceResponse(selected: nil, cancelled: true, description: nil, descriptions: nil, comment: nil)
+                result = ChoiceResponse(dialogType: "choose", answer: nil, cancelled: true, dismissed: false, description: nil, descriptions: nil, comment: nil)
                 NSApp.stopModal()
             }
         )
@@ -1958,7 +2047,7 @@ class DialogManager {
         NSApp.runModal(for: window)
         window.close()
 
-        return result ?? ChoiceResponse(selected: nil, cancelled: true, description: nil, descriptions: nil, comment: nil)
+        return result ?? ChoiceResponse(dialogType: "choose", answer: nil, cancelled: true, dismissed: true, description: nil, descriptions: nil, comment: nil)
     }
 
     // MARK: - Text Input Dialog (Full AppKit with Modern Design)
@@ -2051,12 +2140,12 @@ class DialogManager {
         contentView.addSubview(submitButton)
 
         submitButton.onClick = {
-            result = TextInputResponse(text: inputField.textField.stringValue, cancelled: false, comment: nil)
+            result = TextInputResponse(dialogType: "textInput", answer: inputField.textField.stringValue, cancelled: false, dismissed: false, comment: nil)
             NSApp.stopModal()
         }
 
         cancelButton.onClick = {
-            result = TextInputResponse(text: nil, cancelled: true, comment: nil)
+            result = TextInputResponse(dialogType: "textInput", answer: nil, cancelled: true, dismissed: false, comment: nil)
             NSApp.stopModal()
         }
 
@@ -2079,7 +2168,7 @@ class DialogManager {
         NSApp.runModal(for: window)
         window.close()
 
-        return result ?? TextInputResponse(text: nil, cancelled: true, comment: nil)
+        return result ?? TextInputResponse(dialogType: "textInput", answer: nil, cancelled: true, dismissed: true, comment: nil)
     }
 
     // MARK: - Notify (using osascript for bundle-free notifications)
@@ -2107,7 +2196,7 @@ class DialogManager {
             success = false
         }
 
-        return NotifyResponse(success: success)
+        return NotifyResponse(dialogType: "notify", success: success)
     }
 
     private func escapeForAppleScript(_ str: String) -> String {
@@ -2142,7 +2231,7 @@ class DialogManager {
         _ = synth
         _ = speechDelegate
 
-        return SpeakResponse(success: true)
+        return SpeakResponse(dialogType: "speak", success: true)
     }
 
     // MARK: - Multi-Question Dialog
@@ -2157,7 +2246,7 @@ class DialogManager {
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
         // Convert answers from Set<Int> to response format
-        func buildResponse(answers: [String: Set<Int>], cancelled: Bool) -> QuestionsResponse {
+        func buildResponse(answers: [String: Set<Int>], cancelled: Bool, dismissed: Bool) -> QuestionsResponse {
             var responseAnswers: [String: StringOrStrings] = [:]
             var completedCount = 0
 
@@ -2173,16 +2262,16 @@ class DialogManager {
                 }
             }
 
-            return QuestionsResponse(answers: responseAnswers, cancelled: cancelled, completedCount: completedCount)
+            return QuestionsResponse(dialogType: "questions", answers: responseAnswers, cancelled: cancelled, dismissed: dismissed, completedCount: completedCount)
         }
 
         let onComplete: ([String: Set<Int>]) -> Void = { answers in
-            result = buildResponse(answers: answers, cancelled: false)
+            result = buildResponse(answers: answers, cancelled: false, dismissed: false)
             NSApp.stopModal()
         }
 
         let onCancel: () -> Void = {
-            result = QuestionsResponse(answers: [:], cancelled: true, completedCount: 0)
+            result = QuestionsResponse(dialogType: "questions", answers: [:], cancelled: true, dismissed: false, completedCount: 0)
             NSApp.stopModal()
         }
 
@@ -2225,7 +2314,7 @@ class DialogManager {
         NSApp.runModal(for: window)
         window.close()
 
-        return result ?? QuestionsResponse(answers: [:], cancelled: true, completedCount: 0)
+        return result ?? QuestionsResponse(dialogType: "questions", answers: [:], cancelled: true, dismissed: true, completedCount: 0)
     }
 }
 
