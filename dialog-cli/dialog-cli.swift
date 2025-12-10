@@ -167,7 +167,7 @@ struct Theme {
     static let accentGreen = NSColor(red: 0.30, green: 0.85, blue: 0.55, alpha: 1.0)
     static let accentRed = NSColor(red: 0.95, green: 0.35, blue: 0.40, alpha: 1.0)
 
-    static let border = NSColor(white: 0.35, alpha: 1.0)
+    static let border = NSColor(red: 0.35, green: 0.35, blue: 0.35, alpha: 1.0)
     static let inputBackground = NSColor(red: 0.16, green: 0.16, blue: 0.18, alpha: 1.0)
 
     static let cornerRadius: CGFloat = 16
@@ -205,29 +205,29 @@ struct KeyboardHintsView: View {
     let hints: [KeyboardHint]
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             ForEach(hints) { hint in
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Text(hint.key)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(Theme.Colors.textSecondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
+                            Capsule()
                                 .fill(Theme.Colors.cardBackground)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .strokeBorder(Theme.Colors.border, lineWidth: 1)
+                            Capsule()
+                                .strokeBorder(Theme.Colors.border.opacity(0.6), lineWidth: 1)
                         )
                     Text(hint.label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundColor(Theme.Colors.textMuted)
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
 }
 
@@ -469,6 +469,8 @@ struct SwiftUIConfirmDialog: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
+    @State private var keyboardMonitor: KeyboardNavigationMonitor?
+
     var body: some View {
         VStack(spacing: 0) {
             // Icon
@@ -524,6 +526,18 @@ struct SwiftUIConfirmDialog: View {
         .background(Color.clear)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("\(title). \(message)"))
+        .onAppear { setupKeyboardNavigation() }
+        .onDisappear { keyboardMonitor = nil }
+    }
+
+    private func setupKeyboardNavigation() {
+        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
+            if keyCode == 36 { // Enter/Return - confirm
+                onConfirm()
+                return true
+            }
+            return false
+        }
     }
 }
 
@@ -2144,16 +2158,16 @@ class DialogManager {
         let promptHeight = max(20, ceil(promptSize.height) + 8)
 
         // Calculate total window height based on content
-        let topPadding: CGFloat = 28
+        let topPadding: CGFloat = 32
         let iconSize: CGFloat = 56
-        let iconToTitle: CGFloat = 16
-        let titleHeight: CGFloat = 24
-        let titleToPrompt: CGFloat = 8
-        let promptToInput: CGFloat = 16
-        let inputHeight: CGFloat = 44
-        let inputToButtons: CGFloat = 20
+        let iconToTitle: CGFloat = 20
+        let titleHeight: CGFloat = 28
+        let titleToPrompt: CGFloat = 12
+        let promptToInput: CGFloat = 32
+        let inputHeight: CGFloat = 48
+        let inputToButtons: CGFloat = 28
         let buttonHeight: CGFloat = 48
-        let bottomPadding: CGFloat = 20
+        let bottomPadding: CGFloat = 24
 
         let windowHeight = topPadding + iconSize + iconToTitle + titleHeight + titleToPrompt + promptHeight + promptToInput + inputHeight + inputToButtons + buttonHeight + bottomPadding
 
