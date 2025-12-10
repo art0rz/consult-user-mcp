@@ -5,6 +5,32 @@ import AVFoundation
 import Foundation
 import SwiftUI
 
+// MARK: - Shared Types
+
+enum StringOrStrings: Codable {
+    case single(String)
+    case multiple([String])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let arr = try? container.decode([String].self) {
+            self = .multiple(arr)
+        } else if let str = try? container.decode(String.self) {
+            self = .single(str)
+        } else {
+            throw DecodingError.typeMismatch(StringOrStrings.self, .init(codingPath: decoder.codingPath, debugDescription: "Expected String or [String]"))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .single(let str): try container.encode(str)
+        case .multiple(let arr): try container.encode(arr)
+        }
+    }
+}
+
 // MARK: - Models
 
 struct ConfirmRequest: Codable {
@@ -32,35 +58,11 @@ struct ChooseRequest: Codable {
 }
 
 struct ChoiceResponse: Codable {
-    let selected: SelectedValue?
+    let selected: StringOrStrings?
     let cancelled: Bool
     let description: String?
     let descriptions: [String?]?
     let comment: String?
-
-    enum SelectedValue: Codable {
-        case single(String)
-        case multiple([String])
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            if let arr = try? container.decode([String].self) {
-                self = .multiple(arr)
-            } else if let str = try? container.decode(String.self) {
-                self = .single(str)
-            } else {
-                throw DecodingError.typeMismatch(SelectedValue.self, .init(codingPath: decoder.codingPath, debugDescription: "Expected String or [String]"))
-            }
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            switch self {
-            case .single(let str): try container.encode(str)
-            case .multiple(let arr): try container.encode(arr)
-            }
-        }
-    }
 }
 
 struct TextInputRequest: Codable {
@@ -134,33 +136,9 @@ struct QuestionsRequest: Codable {
 }
 
 struct QuestionsResponse: Codable {
-    let answers: [String: AnswerValue]
+    let answers: [String: StringOrStrings]
     let cancelled: Bool
     let completedCount: Int
-
-    enum AnswerValue: Codable {
-        case single(String)
-        case multiple([String])
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            if let arr = try? container.decode([String].self) {
-                self = .multiple(arr)
-            } else if let str = try? container.decode(String.self) {
-                self = .single(str)
-            } else {
-                throw DecodingError.typeMismatch(AnswerValue.self, .init(codingPath: decoder.codingPath, debugDescription: "Expected String or [String]"))
-            }
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            switch self {
-            case .single(let str): try container.encode(str)
-            case .multiple(let arr): try container.encode(arr)
-            }
-        }
-    }
 }
 
 // MARK: - Modern Theme
@@ -172,7 +150,7 @@ struct Theme {
     static let cardSelected = NSColor(red: 0.22, green: 0.22, blue: 0.28, alpha: 1.0)
 
     static let textPrimary = NSColor.white
-    static let textSecondary = NSColor(white: 0.65, alpha: 1.0)
+    static let textSecondary = NSColor(white: 0.75, alpha: 1.0)
     static let textMuted = NSColor(white: 0.4, alpha: 1.0)
 
     static let accentBlue = NSColor(red: 0.35, green: 0.55, blue: 1.0, alpha: 1.0)
@@ -193,9 +171,11 @@ struct Theme {
         static let cardHover = Color(red: 0.18, green: 0.18, blue: 0.22)
         static let cardSelected = Color(red: 0.22, green: 0.22, blue: 0.28)
         static let textPrimary = Color.white
-        static let textSecondary = Color(white: 0.65)
+        static let textSecondary = Color(white: 0.75)
         static let textMuted = Color(white: 0.4)
         static let accentBlue = Color(red: 0.35, green: 0.55, blue: 1.0)
+        static let accentBlueLight = Color(red: 0.45, green: 0.65, blue: 1.0)
+        static let accentBlueDark = Color(red: 0.25, green: 0.45, blue: 0.90)
         static let accentGreen = Color(red: 0.30, green: 0.85, blue: 0.55)
         static let accentRed = Color(red: 0.95, green: 0.35, blue: 0.40)
         static let border = Color(white: 0.25)
@@ -209,9 +189,21 @@ struct SwiftUIChoiceCard: View {
     let title: String
     let subtitle: String?
     let isSelected: Bool
+    let isMultiSelect: Bool
+    let isFocused: Bool
     let onTap: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isHovered = false
+
+    init(title: String, subtitle: String?, isSelected: Bool, isMultiSelect: Bool = false, isFocused: Bool = false, onTap: @escaping () -> Void) {
+        self.title = title
+        self.subtitle = subtitle
+        self.isSelected = isSelected
+        self.isMultiSelect = isMultiSelect
+        self.isFocused = isFocused
+        self.onTap = onTap
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -233,34 +225,82 @@ struct SwiftUIChoiceCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Always reserve space for checkmark to prevent layout shifts
-                ZStack {
-                    Circle()
+                // Show checkbox for multi-select, radio for single-select
+                if isMultiSelect {
+                    // Checkbox style
+                    RoundedRectangle(cornerRadius: 4)
                         .fill(isSelected ? Theme.Colors.accentBlue : Color.clear)
-                        .frame(width: 22, height: 22)
-
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(isSelected ? Theme.Colors.accentBlue : Theme.Colors.border, lineWidth: 2)
+                        )
+                        .overlay(
+                            Group {
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                        )
+                } else {
+                    // Radio button style
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(isSelected ? Theme.Colors.accentBlue : Theme.Colors.border, lineWidth: 2)
+                        )
+                        .overlay(
+                            Group {
+                                if isSelected {
+                                    Circle()
+                                        .fill(Theme.Colors.accentBlue)
+                                        .frame(width: 12, height: 12)
+                                }
+                            }
+                        )
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? Theme.Colors.accentBlue.opacity(0.15) : (isHovered ? Theme.Colors.cardHover : Theme.Colors.cardBackground))
+                    .fill(isSelected ? Theme.Colors.accentBlue.opacity(0.25) : ((isHovered || isFocused) ? Theme.Colors.cardHover : Theme.Colors.cardBackground))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(isSelected ? Theme.Colors.accentBlue : Theme.Colors.border, lineWidth: isSelected ? 2 : 1)
+                    .strokeBorder(
+                        isFocused ? Theme.Colors.accentBlue.opacity(0.8) : (isSelected ? Theme.Colors.accentBlue : Theme.Colors.border),
+                        lineWidth: (isSelected || isFocused) ? 2 : 1
+                    )
+            )
+            .overlay(
+                // Focus ring glow effect
+                Group {
+                    if isFocused && !isSelected {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Theme.Colors.accentBlue.opacity(0.4), lineWidth: 3)
+                            .padding(-2)
+                    }
+                }
             )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            isHovered = hovering
+            if reduceMotion {
+                isHovered = hovering
+            } else {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isHovered = hovering
+                }
+            }
         }
+        .accessibilityLabel(Text(title))
+        .accessibilityHint(subtitle.map { Text($0) } ?? Text(""))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -270,15 +310,18 @@ struct SwiftUIModernButton: View {
     let title: String
     let isPrimary: Bool
     let isDestructive: Bool
+    let isDisabled: Bool
     let action: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isHovered = false
     @State private var isPressed = false
 
-    init(title: String, isPrimary: Bool = false, isDestructive: Bool = false, action: @escaping () -> Void) {
+    init(title: String, isPrimary: Bool = false, isDestructive: Bool = false, isDisabled: Bool = false, action: @escaping () -> Void) {
         self.title = title
         self.isPrimary = isPrimary
         self.isDestructive = isDestructive
+        self.isDisabled = isDisabled
         self.action = action
     }
 
@@ -291,7 +334,7 @@ struct SwiftUIModernButton: View {
                 .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(buttonBackground)
+                        .fill(buttonFill)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -299,25 +342,43 @@ struct SwiftUIModernButton: View {
                 )
         }
         .buttonStyle(PressableButtonStyle())
+        .disabled(isDisabled)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
+            guard !isDisabled else { return }
+            if reduceMotion {
                 isHovered = hovering
+            } else {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isHovered = hovering
+                }
             }
         }
+        .accessibilityLabel(Text(title))
+        .accessibilityAddTraits(isPrimary ? .isButton : [.isButton])
     }
 
-    private var buttonBackground: Color {
-        if isPrimary {
-            return isHovered ? Theme.Colors.accentBlue.opacity(0.85) : Theme.Colors.accentBlue
+    private var buttonFill: AnyShapeStyle {
+        if isDisabled {
+            return AnyShapeStyle(Theme.Colors.cardBackground.opacity(0.5))
+        } else if isPrimary {
+            return AnyShapeStyle(LinearGradient(
+                colors: isHovered
+                    ? [Theme.Colors.accentBlue, Theme.Colors.accentBlueDark]
+                    : [Theme.Colors.accentBlueLight, Theme.Colors.accentBlue],
+                startPoint: .top,
+                endPoint: .bottom
+            ))
         } else if isDestructive {
-            return isHovered ? Theme.Colors.accentRed.opacity(0.3) : Theme.Colors.accentRed.opacity(0.2)
+            return AnyShapeStyle(isHovered ? Theme.Colors.accentRed.opacity(0.3) : Theme.Colors.accentRed.opacity(0.2))
         } else {
-            return isHovered ? Theme.Colors.cardHover : Theme.Colors.cardBackground
+            return AnyShapeStyle(isHovered ? Theme.Colors.cardHover : Theme.Colors.cardBackground)
         }
     }
 
     private var buttonTextColor: Color {
-        if isPrimary {
+        if isDisabled {
+            return Theme.Colors.textMuted
+        } else if isPrimary {
             return .white
         } else if isDestructive {
             return Theme.Colors.accentRed
@@ -330,11 +391,13 @@ struct SwiftUIModernButton: View {
 // MARK: - Button Press Style
 
 struct PressableButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -395,6 +458,8 @@ struct SwiftUIConfirmDialog: View {
             .padding(.bottom, 20)
         }
         .background(Color.clear)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("\(title). \(message)"))
     }
 }
 
@@ -445,9 +510,12 @@ class StyledTextField: NSView {
     let textField: NSTextField
     private let isSecure: Bool
     private var isFocused = false
+    private var focusAnimationProgress: CGFloat = 0.0
+    private var animationDisplayLink: CVDisplayLink?
 
     override var mouseDownCanMoveWindow: Bool { false }
     override var acceptsFirstResponder: Bool { true }
+    override var wantsUpdateLayer: Bool { true }
 
     init(isSecure: Bool, defaultValue: String) {
         self.isSecure = isSecure
@@ -457,6 +525,9 @@ class StyledTextField: NSView {
             textField = NSTextField()
         }
         super.init(frame: .zero)
+
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
 
         textField.stringValue = defaultValue
         textField.isEditable = true
@@ -484,16 +555,61 @@ class StyledTextField: NSView {
         window?.makeFirstResponder(textField)
     }
 
+    private func animateFocusChange(to focused: Bool) {
+        let targetProgress: CGFloat = focused ? 1.0 : 0.0
+        let duration: TimeInterval = 0.12
+        let startProgress = focusAnimationProgress
+        let startTime = CACurrentMediaTime()
+
+        // Use NSTimer for simple animation
+        Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+
+            let elapsed = CACurrentMediaTime() - startTime
+            let t = min(elapsed / duration, 1.0)
+            // Ease-out curve
+            let easedT = 1.0 - pow(1.0 - t, 3)
+
+            self.focusAnimationProgress = startProgress + (targetProgress - startProgress) * CGFloat(easedT)
+            self.needsDisplay = true
+
+            if t >= 1.0 {
+                timer.invalidate()
+                self.focusAnimationProgress = targetProgress
+                self.needsDisplay = true
+            }
+        }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 1, dy: 1)
         let path = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
 
+        // Animated glow when focused
+        if focusAnimationProgress > 0 {
+            let glowRect = bounds.insetBy(dx: -2, dy: -2)
+            let glowPath = NSBezierPath(roundedRect: glowRect, xRadius: 12, yRadius: 12)
+            Theme.accentBlue.withAlphaComponent(0.3 * focusAnimationProgress).setFill()
+            glowPath.fill()
+        }
+
         Theme.inputBackground.setFill()
         path.fill()
 
-        let borderColor = isFocused ? Theme.accentBlue : Theme.border
+        // Interpolate border color and width
+        let unfocusedColor = Theme.border
+        let focusedColor = Theme.accentBlue
+        let borderColor = NSColor(
+            red: unfocusedColor.redComponent + (focusedColor.redComponent - unfocusedColor.redComponent) * focusAnimationProgress,
+            green: unfocusedColor.greenComponent + (focusedColor.greenComponent - unfocusedColor.greenComponent) * focusAnimationProgress,
+            blue: unfocusedColor.blueComponent + (focusedColor.blueComponent - unfocusedColor.blueComponent) * focusAnimationProgress,
+            alpha: 1.0
+        )
         borderColor.setStroke()
-        path.lineWidth = isFocused ? 2 : 1
+        path.lineWidth = 1.0 + 1.5 * focusAnimationProgress
         path.stroke()
     }
 }
@@ -501,12 +617,36 @@ class StyledTextField: NSView {
 extension StyledTextField: NSTextFieldDelegate {
     func controlTextDidBeginEditing(_ obj: Notification) {
         isFocused = true
-        needsDisplay = true
+        animateFocusChange(to: true)
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
         isFocused = false
-        needsDisplay = true
+        animateFocusChange(to: false)
+    }
+}
+
+// MARK: - Keyboard Navigation Monitor
+
+class KeyboardNavigationMonitor {
+    private var monitor: Any?
+    private let onKeyDown: (UInt16) -> Bool
+
+    init(onKeyDown: @escaping (UInt16) -> Bool) {
+        self.onKeyDown = onKeyDown
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            if self.onKeyDown(event.keyCode) {
+                return nil // Consume event
+            }
+            return event
+        }
+    }
+
+    deinit {
+        if let monitor = monitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 }
 
@@ -522,6 +662,8 @@ struct SwiftUIChooseDialog: View {
     let onCancel: () -> Void
 
     @State private var selectedIndices: Set<Int> = []
+    @State private var focusedIndex: Int = 0
+    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     init(prompt: String, choices: [String], descriptions: [String]?, allowMultiple: Bool, defaultSelection: String?, onComplete: @escaping (Set<Int>) -> Void, onCancel: @escaping () -> Void) {
         self.prompt = prompt
@@ -532,26 +674,40 @@ struct SwiftUIChooseDialog: View {
         self.onComplete = onComplete
         self.onCancel = onCancel
 
-        // Set default selection
         if let defaultSel = defaultSelection, let idx = choices.firstIndex(of: defaultSel) {
             _selectedIndices = State(initialValue: [idx])
+            _focusedIndex = State(initialValue: idx)
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            Text(prompt)
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(Theme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
+            headerView
+            choicesScrollView
+            footerButtons
+        }
+        .background(Color.clear)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(prompt))
+        .accessibilityHint(allowMultiple ? "Select one or more options. Use arrow keys to navigate, Space to select." : "Select one option. Use arrow keys to navigate, Space to select.")
+        .onAppear { setupKeyboardNavigation() }
+        .onDisappear { keyboardMonitor = nil }
+    }
 
-            // Scrollable choices
+    private var headerView: some View {
+        Text(prompt)
+            .font(.system(size: 17, weight: .bold))
+            .foregroundColor(Theme.Colors.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+            .lineLimit(nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+    }
+
+    private var choicesScrollView: some View {
+        ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(Array(choices.enumerated()), id: \.offset) { index, choice in
@@ -559,36 +715,68 @@ struct SwiftUIChooseDialog: View {
                             title: choice,
                             subtitle: descriptions?[safe: index],
                             isSelected: selectedIndices.contains(index),
-                            onTap: {
-                                if allowMultiple {
-                                    if selectedIndices.contains(index) {
-                                        selectedIndices.remove(index)
-                                    } else {
-                                        selectedIndices.insert(index)
-                                    }
-                                } else {
-                                    selectedIndices = [index]
-                                }
-                            }
+                            isMultiSelect: allowMultiple,
+                            isFocused: focusedIndex == index,
+                            onTap: { toggleSelection(at: index) }
                         )
+                        .id(index)
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
             }
             .frame(maxHeight: 500)
-
-            // Footer buttons
-            HStack(spacing: 10) {
-                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Continue", isPrimary: true, action: {
-                    onComplete(selectedIndices)
-                })
+            .onChange(of: focusedIndex) { newIndex in
+                withAnimation(.easeOut(duration: 0.15)) {
+                    proxy.scrollTo(newIndex, anchor: .center)
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
         }
-        .background(Color.clear)
+    }
+
+    private var footerButtons: some View {
+        HStack(spacing: 10) {
+            SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+            SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, action: {
+                onComplete(selectedIndices)
+            })
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+
+    private func setupKeyboardNavigation() {
+        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
+            switch keyCode {
+            case 125: // Down arrow
+                if focusedIndex < choices.count - 1 {
+                    focusedIndex += 1
+                }
+                return true
+            case 126: // Up arrow
+                if focusedIndex > 0 {
+                    focusedIndex -= 1
+                }
+                return true
+            case 49: // Space - toggle selection
+                toggleSelection(at: focusedIndex)
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private func toggleSelection(at index: Int) {
+        if allowMultiple {
+            if selectedIndices.contains(index) {
+                selectedIndices.remove(index)
+            } else {
+                selectedIndices.insert(index)
+            }
+        } else {
+            selectedIndices = [index]
+        }
     }
 }
 
@@ -599,14 +787,20 @@ struct ProgressBar: View {
     let total: Int
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             ForEach(0..<total, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(index < current ? Theme.Colors.accentBlue : Theme.Colors.border)
-                    .frame(height: 4)
+                Capsule()
+                    .fill(index < current ? Theme.Colors.accentBlue : Theme.Colors.cardBackground)
+                    .frame(height: index < current ? 6 : 4)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(index < current ? Color.clear : Theme.Colors.border.opacity(0.5), lineWidth: 1)
+                    )
             }
         }
-        .frame(height: 4)
+        .frame(height: 6)
+        .accessibilityLabel(Text("Step \(current) of \(total)"))
+        .accessibilityValue(Text("\(Int(Double(current) / Double(total) * 100)) percent complete"))
     }
 }
 
@@ -615,6 +809,7 @@ struct ProgressBar: View {
 struct QuestionSection: View {
     let question: QuestionItem
     @Binding var selectedIndices: Set<Int>
+    @Binding var focusedIndex: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -629,20 +824,25 @@ struct QuestionSection: View {
                         title: option.label,
                         subtitle: option.description,
                         isSelected: selectedIndices.contains(index),
-                        onTap: {
-                            if question.multiSelect {
-                                if selectedIndices.contains(index) {
-                                    selectedIndices.remove(index)
-                                } else {
-                                    selectedIndices.insert(index)
-                                }
-                            } else {
-                                selectedIndices = [index]
-                            }
-                        }
+                        isMultiSelect: question.multiSelect,
+                        isFocused: focusedIndex == index,
+                        onTap: { toggleSelection(at: index) }
                     )
+                    .id(index)
                 }
             }
+        }
+    }
+
+    private func toggleSelection(at index: Int) {
+        if question.multiSelect {
+            if selectedIndices.contains(index) {
+                selectedIndices.remove(index)
+            } else {
+                selectedIndices.insert(index)
+            }
+        } else {
+            selectedIndices = [index]
         }
     }
 }
@@ -656,6 +856,8 @@ struct SwiftUIWizardDialog: View {
 
     @State private var currentIndex = 0
     @State private var answers: [String: Set<Int>] = [:]
+    @State private var focusedOptionIndex: Int = 0
+    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     private var currentQuestion: QuestionItem { questions[currentIndex] }
     private var currentAnswer: Set<Int> { answers[currentQuestion.id] ?? [] }
@@ -677,43 +879,100 @@ struct SwiftUIWizardDialog: View {
                 .padding(.bottom, 16)
 
             // Question content
-            ScrollView {
-                QuestionSection(
-                    question: currentQuestion,
-                    selectedIndices: Binding(
-                        get: { currentAnswer },
-                        set: { answers[currentQuestion.id] = $0 }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    QuestionSection(
+                        question: currentQuestion,
+                        selectedIndices: Binding(
+                            get: { currentAnswer },
+                            set: { answers[currentQuestion.id] = $0 }
+                        ),
+                        focusedIndex: $focusedOptionIndex
                     )
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+                .frame(maxHeight: 420)
+                .onChange(of: focusedOptionIndex) { newIndex in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
             }
-            .frame(maxHeight: 420)
 
             // Navigation buttons
             HStack(spacing: 10) {
                 if isFirst {
                     SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
                 } else {
-                    SwiftUIModernButton(title: "Back", isPrimary: false, action: {
-                        currentIndex -= 1
-                    })
+                    SwiftUIModernButton(title: "Back", isPrimary: false, action: goBack)
                 }
 
                 if isLast {
-                    SwiftUIModernButton(title: "Submit", isPrimary: true, action: {
+                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, action: {
                         onComplete(answers)
                     })
                 } else {
-                    SwiftUIModernButton(title: "Next", isPrimary: true, action: {
-                        currentIndex += 1
-                    })
+                    SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, action: goNext)
                 }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
         }
         .background(Color.clear)
+        .onAppear { setupKeyboardNavigation() }
+        .onDisappear { keyboardMonitor = nil }
+        .onChange(of: currentIndex) { _ in focusedOptionIndex = 0 }
+    }
+
+    private func setupKeyboardNavigation() {
+        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
+            switch keyCode {
+            case 125: // Down arrow
+                if focusedOptionIndex < currentQuestion.options.count - 1 {
+                    focusedOptionIndex += 1
+                }
+                return true
+            case 126: // Up arrow
+                if focusedOptionIndex > 0 {
+                    focusedOptionIndex -= 1
+                }
+                return true
+            case 49: // Space - toggle selection
+                toggleSelection(at: focusedOptionIndex)
+                return true
+            case 124: // Right arrow - next question
+                if !isLast { goNext() }
+                return true
+            case 123: // Left arrow - previous question
+                if !isFirst { goBack() }
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private func toggleSelection(at index: Int) {
+        var current = answers[currentQuestion.id] ?? []
+        if currentQuestion.multiSelect {
+            if current.contains(index) {
+                current.remove(index)
+            } else {
+                current.insert(index)
+            }
+        } else {
+            current = [index]
+        }
+        answers[currentQuestion.id] = current
+    }
+
+    private func goNext() {
+        currentIndex += 1
+    }
+
+    private func goBack() {
+        currentIndex -= 1
     }
 }
 
@@ -724,8 +983,10 @@ struct AccordionSection: View {
     let isExpanded: Bool
     let isAnswered: Bool
     @Binding var selectedIndices: Set<Int>
+    @Binding var focusedIndex: Int
     let onToggle: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isHovered = false
 
     var body: some View {
@@ -736,13 +997,21 @@ struct AccordionSection: View {
                     // Status indicator
                     ZStack {
                         Circle()
-                            .fill(isAnswered ? Theme.Colors.accentGreen : Theme.Colors.border)
-                            .frame(width: 20, height: 20)
+                            .fill(isAnswered ? Theme.Colors.accentBlue : Theme.Colors.cardBackground)
+                            .frame(width: 22, height: 22)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(isAnswered ? Color.clear : Theme.Colors.border, lineWidth: 2)
+                            )
 
                         if isAnswered {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.white)
+                        } else {
+                            Circle()
+                                .fill(Theme.Colors.textMuted)
+                                .frame(width: 6, height: 6)
                         }
                     }
 
@@ -764,7 +1033,15 @@ struct AccordionSection: View {
                 )
             }
             .buttonStyle(.plain)
-            .onHover { isHovered = $0 }
+            .onHover { hovering in
+                if reduceMotion {
+                    isHovered = hovering
+                } else {
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        isHovered = hovering
+                    }
+                }
+            }
 
             // Expanded content
             if isExpanded {
@@ -774,23 +1051,29 @@ struct AccordionSection: View {
                             title: option.label,
                             subtitle: option.description,
                             isSelected: selectedIndices.contains(index),
-                            onTap: {
-                                if question.multiSelect {
-                                    if selectedIndices.contains(index) {
-                                        selectedIndices.remove(index)
-                                    } else {
-                                        selectedIndices.insert(index)
-                                    }
-                                } else {
-                                    selectedIndices = [index]
-                                }
-                            }
+                            isMultiSelect: question.multiSelect,
+                            isFocused: focusedIndex == index,
+                            onTap: { toggleSelection(at: index) }
                         )
+                        .id(index)
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 12)
+                .transition(reduceMotion ? .identity : .opacity)
             }
+        }
+    }
+
+    private func toggleSelection(at index: Int) {
+        if question.multiSelect {
+            if selectedIndices.contains(index) {
+                selectedIndices.remove(index)
+            } else {
+                selectedIndices.insert(index)
+            }
+        } else {
+            selectedIndices = [index]
         }
     }
 }
@@ -800,11 +1083,18 @@ struct SwiftUIAccordionDialog: View {
     let onComplete: ([String: Set<Int>]) -> Void
     let onCancel: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var expandedId: String?
     @State private var answers: [String: Set<Int>] = [:]
+    @State private var focusedOptionIndex: Int = 0
+    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     private var answeredCount: Int {
         answers.values.filter { !$0.isEmpty }.count
+    }
+
+    private var expandedQuestion: QuestionItem? {
+        questions.first { $0.id == expandedId }
     }
 
     var body: some View {
@@ -826,34 +1116,42 @@ struct SwiftUIAccordionDialog: View {
             .padding(.bottom, 12)
 
             // Accordion sections
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(questions, id: \.id) { question in
-                        AccordionSection(
-                            question: question,
-                            isExpanded: expandedId == question.id,
-                            isAnswered: !(answers[question.id] ?? []).isEmpty,
-                            selectedIndices: Binding(
-                                get: { answers[question.id] ?? [] },
-                                set: { answers[question.id] = $0 }
-                            ),
-                            onToggle: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    expandedId = expandedId == question.id ? nil : question.id
-                                }
-                            }
-                        )
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(questions, id: \.id) { question in
+                            AccordionSection(
+                                question: question,
+                                isExpanded: expandedId == question.id,
+                                isAnswered: !(answers[question.id] ?? []).isEmpty,
+                                selectedIndices: Binding(
+                                    get: { answers[question.id] ?? [] },
+                                    set: { answers[question.id] = $0 }
+                                ),
+                                focusedIndex: Binding(
+                                    get: { expandedId == question.id ? focusedOptionIndex : -1 },
+                                    set: { if expandedId == question.id { focusedOptionIndex = $0 } }
+                                ),
+                                onToggle: { toggleExpanded(question.id) }
+                            )
+                            .id(question.id)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+                .frame(maxHeight: 450)
+                .onChange(of: focusedOptionIndex) { newIndex in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
             }
-            .frame(maxHeight: 450)
 
             // Footer buttons
             HStack(spacing: 10) {
                 SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Submit", isPrimary: true, action: {
+                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, action: {
                     onComplete(answers)
                 })
             }
@@ -862,11 +1160,67 @@ struct SwiftUIAccordionDialog: View {
         }
         .background(Color.clear)
         .onAppear {
-            // Expand first question by default
             if let first = questions.first {
                 expandedId = first.id
             }
+            setupKeyboardNavigation()
         }
+        .onDisappear { keyboardMonitor = nil }
+        .onChange(of: expandedId) { _ in focusedOptionIndex = 0 }
+    }
+
+    private func toggleExpanded(_ questionId: String) {
+        if reduceMotion {
+            expandedId = expandedId == questionId ? nil : questionId
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                expandedId = expandedId == questionId ? nil : questionId
+            }
+        }
+    }
+
+    private func setupKeyboardNavigation() {
+        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
+            guard let question = expandedQuestion else { return false }
+
+            switch keyCode {
+            case 125: // Down arrow
+                if focusedOptionIndex < question.options.count - 1 {
+                    focusedOptionIndex += 1
+                }
+                return true
+            case 126: // Up arrow
+                if focusedOptionIndex > 0 {
+                    focusedOptionIndex -= 1
+                }
+                return true
+            case 49: // Space - toggle selection
+                toggleSelection(for: question, at: focusedOptionIndex)
+                return true
+            case 48: // Tab - next accordion section
+                if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
+                    let nextIdx = (idx + 1) % questions.count
+                    toggleExpanded(questions[nextIdx].id)
+                }
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private func toggleSelection(for question: QuestionItem, at index: Int) {
+        var current = answers[question.id] ?? []
+        if question.multiSelect {
+            if current.contains(index) {
+                current.remove(index)
+            } else {
+                current.insert(index)
+            }
+        } else {
+            current = [index]
+        }
+        answers[question.id] = current
     }
 }
 
@@ -878,9 +1232,17 @@ struct SwiftUIQuestionnaireDialog: View {
     let onCancel: () -> Void
 
     @State private var answers: [String: Set<Int>] = [:]
+    @State private var focusedQuestionIndex: Int = 0
+    @State private var focusedOptionIndex: Int = 0
+    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     private var answeredCount: Int {
         answers.values.filter { !$0.isEmpty }.count
+    }
+
+    private var focusedQuestion: QuestionItem? {
+        guard focusedQuestionIndex < questions.count else { return nil }
+        return questions[focusedQuestionIndex]
     }
 
     var body: some View {
@@ -902,77 +1264,135 @@ struct SwiftUIQuestionnaireDialog: View {
             .padding(.bottom, 12)
 
             // All questions visible
-            ScrollView {
-                VStack(spacing: 24) {
-                    ForEach(Array(questions.enumerated()), id: \.element.id) { index, question in
-                        VStack(alignment: .leading, spacing: 0) {
-                            // Question number badge
-                            HStack(spacing: 8) {
-                                ZStack {
-                                    Circle()
-                                        .fill(!(answers[question.id] ?? []).isEmpty ? Theme.Colors.accentBlue : Theme.Colors.border)
-                                        .frame(width: 24, height: 24)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        ForEach(Array(questions.enumerated()), id: \.element.id) { qIndex, question in
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Question number badge
+                                HStack(spacing: 8) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(!(answers[question.id] ?? []).isEmpty ? Theme.Colors.accentBlue : Theme.Colors.border)
+                                            .frame(width: 24, height: 24)
 
-                                    Text("\(index + 1)")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(.white)
+                                        Text("\(qIndex + 1)")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    Text(question.question)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(Theme.Colors.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
+                                .padding(.bottom, 12)
+                                .id("q\(qIndex)")
 
-                                Text(question.question)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(Theme.Colors.textPrimary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.bottom, 12)
-
-                            // Options
-                            VStack(spacing: 8) {
-                                ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
-                                    SwiftUIChoiceCard(
-                                        title: option.label,
-                                        subtitle: option.description,
-                                        isSelected: (answers[question.id] ?? []).contains(optIndex),
-                                        onTap: {
-                                            var current = answers[question.id] ?? []
-                                            if question.multiSelect {
-                                                if current.contains(optIndex) {
-                                                    current.remove(optIndex)
-                                                } else {
-                                                    current.insert(optIndex)
-                                                }
-                                            } else {
-                                                current = [optIndex]
-                                            }
-                                            answers[question.id] = current
-                                        }
-                                    )
+                                // Options
+                                VStack(spacing: 8) {
+                                    ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
+                                        SwiftUIChoiceCard(
+                                            title: option.label,
+                                            subtitle: option.description,
+                                            isSelected: (answers[question.id] ?? []).contains(optIndex),
+                                            isMultiSelect: question.multiSelect,
+                                            isFocused: focusedQuestionIndex == qIndex && focusedOptionIndex == optIndex,
+                                            onTap: { toggleSelection(questionId: question.id, optionIndex: optIndex, multiSelect: question.multiSelect) }
+                                        )
+                                        .id("q\(qIndex)o\(optIndex)")
+                                    }
                                 }
                             }
-                        }
 
-                        if index < questions.count - 1 {
-                            Divider()
-                                .background(Theme.Colors.border)
-                                .padding(.vertical, 4)
+                            if qIndex < questions.count - 1 {
+                                Rectangle()
+                                    .fill(Theme.Colors.border.opacity(0.8))
+                                    .frame(height: 1)
+                                    .padding(.vertical, 8)
+                            }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+                .frame(maxHeight: 450)
+                .onChange(of: focusedQuestionIndex) { _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("q\(focusedQuestionIndex)", anchor: .top)
+                    }
+                }
+                .onChange(of: focusedOptionIndex) { _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("q\(focusedQuestionIndex)o\(focusedOptionIndex)", anchor: .center)
+                    }
+                }
             }
-            .frame(maxHeight: 450)
 
             // Footer buttons
             HStack(spacing: 10) {
                 SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Submit", isPrimary: true, action: {
+                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, action: {
                     onComplete(answers)
                 })
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
         }
         .background(Color.clear)
+        .onAppear { setupKeyboardNavigation() }
+        .onDisappear { keyboardMonitor = nil }
+    }
+
+    private func toggleSelection(questionId: String, optionIndex: Int, multiSelect: Bool) {
+        var current = answers[questionId] ?? []
+        if multiSelect {
+            if current.contains(optionIndex) {
+                current.remove(optionIndex)
+            } else {
+                current.insert(optionIndex)
+            }
+        } else {
+            current = [optionIndex]
+        }
+        answers[questionId] = current
+    }
+
+    private func setupKeyboardNavigation() {
+        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
+            guard let question = focusedQuestion else { return false }
+
+            switch keyCode {
+            case 125: // Down arrow - next option or next question
+                if focusedOptionIndex < question.options.count - 1 {
+                    focusedOptionIndex += 1
+                } else if focusedQuestionIndex < questions.count - 1 {
+                    focusedQuestionIndex += 1
+                    focusedOptionIndex = 0
+                }
+                return true
+            case 126: // Up arrow - previous option or previous question
+                if focusedOptionIndex > 0 {
+                    focusedOptionIndex -= 1
+                } else if focusedQuestionIndex > 0 {
+                    focusedQuestionIndex -= 1
+                    focusedOptionIndex = questions[focusedQuestionIndex].options.count - 1
+                }
+                return true
+            case 49: // Space - toggle selection
+                toggleSelection(questionId: question.id, optionIndex: focusedOptionIndex, multiSelect: question.multiSelect)
+                return true
+            case 48: // Tab - next question
+                if focusedQuestionIndex < questions.count - 1 {
+                    focusedQuestionIndex += 1
+                    focusedOptionIndex = 0
+                }
+                return true
+            default:
+                return false
+            }
+        }
     }
 }
 
@@ -982,6 +1402,18 @@ class BorderlessWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // ESC key
+            NSApp.stopModal(withCode: .cancel)
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        NSApp.stopModal(withCode: .cancel)
+    }
 }
 
 // MARK: - Draggable Window Background
@@ -1328,6 +1760,21 @@ class ModernTextField: NSView {
     }
 }
 
+// MARK: - Speech Delegate
+
+class SpeechCompletionDelegate: NSObject, AVSpeechSynthesizerDelegate {
+    private let onComplete: () -> Void
+
+    init(onComplete: @escaping () -> Void) {
+        self.onComplete = onComplete
+        super.init()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        onComplete()
+    }
+}
+
 // MARK: - Settings Reader
 
 struct UserSettings {
@@ -1370,10 +1817,6 @@ class DialogManager {
 
     func setClientName(_ name: String) {
         clientName = name
-    }
-
-    func reloadSettings() {
-        userSettings = UserSettings.load()
     }
 
     /// Returns the effective position - user setting always overrides passed-in position
@@ -1428,12 +1871,11 @@ class DialogManager {
     // MARK: - Confirm Dialog (SwiftUI)
 
     func confirm(_ request: ConfirmRequest) -> ConfirmResponse {
-        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: ConfirmResponse?
         let windowWidth: CGFloat = 420
-        let windowHeight: CGFloat = 480
+        let windowHeight: CGFloat = 360
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
@@ -1471,12 +1913,11 @@ class DialogManager {
     // MARK: - Choose Dialog (SwiftUI)
 
     func choose(_ request: ChooseRequest) -> ChoiceResponse {
-        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: ChoiceResponse?
         let windowWidth: CGFloat = 420
-        let windowHeight: CGFloat = 600
+        let windowHeight: CGFloat = 520
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
@@ -1494,8 +1935,7 @@ class DialogManager {
                     let selected = selectedIndices.sorted().map { request.choices[$0] }
                     let descs = selectedIndices.sorted().map { request.descriptions?[safe: $0] }
                     result = ChoiceResponse(selected: .multiple(selected), cancelled: false, description: nil, descriptions: descs, comment: nil)
-                } else {
-                    let idx = selectedIndices.first!
+                } else if let idx = selectedIndices.first {
                     result = ChoiceResponse(selected: .single(request.choices[idx]), cancelled: false, description: request.descriptions?[safe: idx], descriptions: nil, comment: nil)
                 }
                 NSApp.stopModal()
@@ -1524,7 +1964,6 @@ class DialogManager {
     // MARK: - Text Input Dialog (Full AppKit with Modern Design)
 
     func textInput(_ request: TextInputRequest) -> TextInputResponse {
-        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: TextInputResponse?
@@ -1679,9 +2118,13 @@ class DialogManager {
     // MARK: - Speak
 
     func speak(_ request: SpeakRequest) -> SpeakResponse {
-        let synth = AVSpeechSynthesizer()
-        let utterance = AVSpeechUtterance(string: request.text)
+        let semaphore = DispatchSemaphore(value: 0)
+        let speechDelegate = SpeechCompletionDelegate { semaphore.signal() }
 
+        let synth = AVSpeechSynthesizer()
+        synth.delegate = speechDelegate
+
+        let utterance = AVSpeechUtterance(string: request.text)
         let normalizedRate = Float(request.rate - 50) / 450.0
         utterance.rate = max(AVSpeechUtteranceMinimumSpeechRate, min(AVSpeechUtteranceMaximumSpeechRate, normalizedRate))
 
@@ -1692,22 +2135,12 @@ class DialogManager {
             }
         }
 
-        var finished = false
-        class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
-            var onFinish: (() -> Void)?
-            func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-                onFinish?()
-            }
-        }
-
-        let delegate = SpeechDelegate()
-        delegate.onFinish = { finished = true }
-        synth.delegate = delegate
         synth.speak(utterance)
+        semaphore.wait()
 
-        while !finished {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-        }
+        // Keep references alive until speech completes
+        _ = synth
+        _ = speechDelegate
 
         return SpeakResponse(success: true)
     }
@@ -1715,18 +2148,17 @@ class DialogManager {
     // MARK: - Multi-Question Dialog
 
     func questions(_ request: QuestionsRequest) -> QuestionsResponse {
-        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: QuestionsResponse?
         let windowWidth: CGFloat = 460
-        let windowHeight: CGFloat = 650
+        let windowHeight: CGFloat = 560
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
         // Convert answers from Set<Int> to response format
         func buildResponse(answers: [String: Set<Int>], cancelled: Bool) -> QuestionsResponse {
-            var responseAnswers: [String: QuestionsResponse.AnswerValue] = [:]
+            var responseAnswers: [String: StringOrStrings] = [:]
             var completedCount = 0
 
             for question in request.questions {
@@ -1735,8 +2167,8 @@ class DialogManager {
                     let labels = indices.sorted().map { question.options[$0].label }
                     if question.multiSelect {
                         responseAnswers[question.id] = .multiple(labels)
-                    } else {
-                        responseAnswers[question.id] = .single(labels.first!)
+                    } else if let first = labels.first {
+                        responseAnswers[question.id] = .single(first)
                     }
                 }
             }
