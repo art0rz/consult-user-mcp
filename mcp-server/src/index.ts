@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SwiftDialogProvider } from "./providers/swift.js";
-import type { DialogPosition } from "./types.js";
+import type { DialogPosition, QuestionsMode } from "./types.js";
 
 const server = new McpServer({ name: "speak-mcp-server", version: "1.0.0" });
 const provider = new SwiftDialogProvider();
@@ -79,6 +79,38 @@ server.registerTool("notify_user", {
   const r = await provider.notify({
     message: p.message, title: p.title ?? "Notice",
     subtitle: p.subtitle, sound: p.sound ?? true,
+  });
+  return { content: [{ type: "text", text: JSON.stringify(r) }] };
+});
+
+const questionSchema = z.object({
+  id: z.string().min(1).max(50),
+  question: z.string().min(1).max(500),
+  options: z.array(z.object({
+    label: z.string().min(1).max(100),
+    description: z.string().max(200).optional(),
+  })).min(2).max(10),
+  multi_select: z.boolean().default(false),
+});
+
+server.registerTool("ask_questions", {
+  description: "Multi-question dialog. Modes: wizard (prev/next), accordion (collapsible), questionnaire (all visible). Returns {answers, cancelled, completedCount}.",
+  inputSchema: z.object({
+    questions: z.array(questionSchema).min(1).max(10),
+    mode: z.enum(["wizard", "accordion", "questionnaire"]).default("wizard"),
+    position: pos,
+  }),
+}, async (p) => {
+  provider.pulse();
+  const r = await provider.questions({
+    questions: p.questions.map(q => ({
+      id: q.id,
+      question: q.question,
+      options: q.options,
+      multiSelect: q.multi_select ?? false,
+    })),
+    mode: (p.mode ?? "wizard") as QuestionsMode,
+    position: (p.position ?? "left") as DialogPosition,
   });
   return { content: [{ type: "text", text: JSON.stringify(r) }] };
 });

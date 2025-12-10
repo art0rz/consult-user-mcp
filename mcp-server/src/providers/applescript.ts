@@ -13,6 +13,8 @@ import type {
   NotifyResult,
   SpeakOptions,
   SpeakResult,
+  QuestionsOptions,
+  QuestionsResult,
 } from "../types.js";
 
 const execAsync = promisify(exec);
@@ -253,5 +255,10 @@ export class AppleScriptDialogProvider implements DialogProvider {
     await execAsync(command);
 
     return { success: true };
+  }
+
+  async questions(_opts: QuestionsOptions): Promise<QuestionsResult> {
+    // AppleScript doesn't support multi-question dialogs - return cancelled
+    return { answers: {}, cancelled: true, completedCount: 0 };
   }
 }

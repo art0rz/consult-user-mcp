@@ -9,6 +9,8 @@ import type {
   NotifyResult,
   SpeakOptions,
   SpeakResult,
+  QuestionsOptions,
+  QuestionsResult,
 } from "../types.js";
 
 /**
@@ -46,4 +48,10 @@ export interface DialogProvider {
    * Speak text aloud using text-to-speech.
    */
   speak(opts: SpeakOptions): Promise<SpeakResult>;
+
+  /**
+   * Display multiple questions in a single dialog.
+   * Supports wizard, accordion, and questionnaire modes.
+   */
+  questions(opts: QuestionsOptions): Promise<QuestionsResult>;
 }

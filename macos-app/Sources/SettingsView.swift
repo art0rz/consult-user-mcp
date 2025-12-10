@@ -202,6 +202,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
+            .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(settings.position == position

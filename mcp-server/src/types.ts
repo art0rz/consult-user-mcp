@@ -84,3 +84,28 @@ export interface SpeakOptions {
   voice?: string;
   rate: number;
 }
+
+// Question definition for multi-question dialogs
+export interface Question {
+  id: string;
+  question: string;
+  options: { label: string; description?: string }[];
+  multiSelect: boolean;
+}
+
+// Mode for multi-question display
+export type QuestionsMode = "wizard" | "accordion" | "questionnaire";
+
+// Options for multi-question dialog
+export interface QuestionsOptions {
+  questions: Question[];
+  mode: QuestionsMode;
+  position: DialogPosition;
+}
+
+// Result for multi-question dialog
+export interface QuestionsResult {
+  answers: Record<string, string | string[]>;
+  cancelled: boolean;
+  completedCount: number;
+}

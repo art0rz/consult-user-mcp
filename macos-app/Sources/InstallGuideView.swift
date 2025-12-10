@@ -2,17 +2,9 @@ import SwiftUI
 import AppKit
 
 enum InstallTarget: String, CaseIterable {
-    case claudeDesktop = "Claude Desktop"
+    case claudeDesktop = "Claude"
     case claudeCode = "Claude Code"
-    case codex = "Codex CLI"
-
-    var icon: String {
-        switch self {
-        case .claudeDesktop: return "message.fill"
-        case .claudeCode: return "terminal.fill"
-        case .codex: return "chevron.left.forwardslash.chevron.right"
-        }
-    }
+    case codex = "Codex"
 
     var configPath: String {
         switch self {
@@ -43,6 +35,125 @@ enum InstallTarget: String, CaseIterable {
         case .codex:
             return "OpenAI's CLI tool"
         }
+    }
+}
+
+// MARK: - Brand Logos
+
+struct ClaudeLogo: View {
+    var size: CGFloat = 20
+    var showTerminalBadge: Bool = false
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            // Claude logo - orange rounded square with white starburst
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.22)
+                    .fill(Color(red: 0.84, green: 0.46, blue: 0.33)) // #D77655
+                ClaudeStarShape()
+                    .fill(Color(red: 0.99, green: 0.95, blue: 0.93)) // #FCF2EE cream
+                    .frame(width: size * 0.65, height: size * 0.65)
+            }
+            .frame(width: size, height: size)
+
+            if showTerminalBadge {
+                Image(systemName: "terminal.fill")
+                    .font(.system(size: size * 0.32, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(2)
+                    .background(Circle().fill(Color.black.opacity(0.8)))
+                    .offset(x: 4, y: 4)
+            }
+        }
+    }
+}
+
+// Claude's starburst/sparkle logo - 8 pointed star
+struct ClaudeStarShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let outerRadius = min(rect.width, rect.height) / 2
+        let innerRadius = outerRadius * 0.38
+        let points = 8
+
+        for i in 0..<(points * 2) {
+            let radius = i.isMultiple(of: 2) ? outerRadius : innerRadius
+            let angle = (CGFloat(i) / CGFloat(points * 2)) * 2 * .pi - .pi / 2
+            let point = CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct OpenAILogo: View {
+    var size: CGFloat = 20
+
+    var body: some View {
+        OpenAIKnotShape()
+            .fill(Color.primary)
+            .frame(width: size, height: size)
+    }
+}
+
+// OpenAI's hexagonal knot logo - simplified geometric version
+struct OpenAIKnotShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2 * 0.9
+        let innerRadius = radius * 0.45
+        let strokeWidth = radius * 0.18
+
+        // Draw 6 curved "petals" forming the knot
+        for i in 0..<6 {
+            let angle = CGFloat(i) * .pi / 3 - .pi / 2
+            let nextAngle = angle + .pi / 3
+
+            // Outer point
+            let outerX = center.x + cos(angle) * radius
+            let outerY = center.y + sin(angle) * radius
+
+            // Inner curve point
+            let midAngle = angle + .pi / 6
+            let innerX = center.x + cos(midAngle) * innerRadius
+            let innerY = center.y + sin(midAngle) * innerRadius
+
+            // Next outer point
+            let nextOuterX = center.x + cos(nextAngle) * radius
+            let nextOuterY = center.y + sin(nextAngle) * radius
+
+            // Draw petal as thick stroke
+            var petal = Path()
+            petal.move(to: CGPoint(x: outerX, y: outerY))
+            petal.addQuadCurve(
+                to: CGPoint(x: innerX, y: innerY),
+                control: CGPoint(
+                    x: center.x + cos(angle + .pi/12) * (radius * 0.75),
+                    y: center.y + sin(angle + .pi/12) * (radius * 0.75)
+                )
+            )
+            petal.addQuadCurve(
+                to: CGPoint(x: nextOuterX, y: nextOuterY),
+                control: CGPoint(
+                    x: center.x + cos(nextAngle - .pi/12) * (radius * 0.75),
+                    y: center.y + sin(nextAngle - .pi/12) * (radius * 0.75)
+                )
+            )
+
+            path.addPath(petal.strokedPath(StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round)))
+        }
+
+        return path
     }
 }
 
@@ -132,35 +243,51 @@ struct InstallGuideView: View {
 
             HStack(spacing: 8) {
                 ForEach(InstallTarget.allCases, id: \.self) { target in
-                    Button(action: { selectedTarget = target }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: target.icon)
-                                .font(.system(size: 16))
-                            Text(target.rawValue)
-                                .font(.system(size: 9, weight: .medium))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(selectedTarget == target
-                                      ? Color.accentColor.opacity(0.15)
-                                      : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(selectedTarget == target
-                                              ? Color.accentColor
-                                              : Color(nsColor: .separatorColor),
-                                              lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(selectedTarget == target ? .accentColor : .secondary)
+                    targetButton(target)
                 }
             }
+        }
+    }
+
+    private func targetButton(_ target: InstallTarget) -> some View {
+        Button(action: { selectedTarget = target }) {
+            VStack(spacing: 4) {
+                targetLogo(for: target)
+                Text(target.rawValue)
+                    .font(.system(size: 9, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle()) // Makes entire area tappable
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(selectedTarget == target
+                          ? Color.accentColor.opacity(0.15)
+                          : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(selectedTarget == target
+                                  ? Color.accentColor
+                                  : Color(nsColor: .separatorColor),
+                                  lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(selectedTarget == target ? .accentColor : .secondary)
+    }
+
+    @ViewBuilder
+    private func targetLogo(for target: InstallTarget) -> some View {
+        switch target {
+        case .claudeDesktop:
+            ClaudeLogo(size: 20)
+        case .claudeCode:
+            ClaudeLogo(size: 20, showTerminalBadge: true)
+        case .codex:
+            OpenAILogo(size: 20)
         }
     }
 

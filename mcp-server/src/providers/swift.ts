@@ -15,6 +15,8 @@ import type {
   NotifyResult,
   SpeakOptions,
   SpeakResult,
+  QuestionsOptions,
+  QuestionsResult,
 } from "../types.js";
 
 const execFileAsync = promisify(execFile);
@@ -101,5 +103,18 @@ export class SwiftDialogProvider implements DialogProvider {
       voice: opts.voice,
       rate: opts.rate,
     });
+  }
+
+  async questions(opts: QuestionsOptions): Promise<QuestionsResult> {
+    return this.runCli<QuestionsResult>("questions", {
+      questions: opts.questions,
+      mode: opts.mode,
+      position: opts.position,
+    });
+  }
+
+  async pulse(): Promise<void> {
+    // Fire and forget - don't wait for completion
+    execFileAsync(CLI_PATH, ["pulse"]).catch(() => {});
   }
 }

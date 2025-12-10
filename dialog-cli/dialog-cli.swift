@@ -113,6 +113,56 @@ struct SpeakResponse: Codable {
     let success: Bool
 }
 
+// MARK: - Multi-Question Models
+
+struct QuestionOption: Codable {
+    let label: String
+    let description: String?
+}
+
+struct QuestionItem: Codable {
+    let id: String
+    let question: String
+    let options: [QuestionOption]
+    let multiSelect: Bool
+}
+
+struct QuestionsRequest: Codable {
+    let questions: [QuestionItem]
+    let mode: String  // "wizard" | "accordion" | "questionnaire"
+    let position: String
+}
+
+struct QuestionsResponse: Codable {
+    let answers: [String: AnswerValue]
+    let cancelled: Bool
+    let completedCount: Int
+
+    enum AnswerValue: Codable {
+        case single(String)
+        case multiple([String])
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let arr = try? container.decode([String].self) {
+                self = .multiple(arr)
+            } else if let str = try? container.decode(String.self) {
+                self = .single(str)
+            } else {
+                throw DecodingError.typeMismatch(AnswerValue.self, .init(codingPath: decoder.codingPath, debugDescription: "Expected String or [String]"))
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .single(let str): try container.encode(str)
+            case .multiple(let arr): try container.encode(arr)
+            }
+        }
+    }
+}
+
 // MARK: - Modern Theme
 
 struct Theme {
@@ -171,24 +221,25 @@ struct SwiftUIChoiceCard: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Theme.Colors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .lineLimit(3)
+                        .lineLimit(nil)
 
                     if let subtitle = subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundColor(Theme.Colors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(3)
+                            .lineLimit(nil)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if isSelected {
-                    ZStack {
-                        Circle()
-                            .fill(Theme.Colors.accentBlue)
-                            .frame(width: 22, height: 22)
+                // Always reserve space for checkmark to prevent layout shifts
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Theme.Colors.accentBlue : Color.clear)
+                        .frame(width: 22, height: 22)
 
+                    if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
@@ -494,7 +545,7 @@ struct SwiftUIChooseDialog: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(Theme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-                .lineLimit(3)
+                .lineLimit(nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
@@ -525,13 +576,397 @@ struct SwiftUIChooseDialog: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
             }
-            .frame(maxHeight: 340)
+            .frame(maxHeight: 500)
 
             // Footer buttons
             HStack(spacing: 10) {
                 SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
                 SwiftUIModernButton(title: "Continue", isPrimary: true, action: {
                     onComplete(selectedIndices)
+                })
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .background(Color.clear)
+    }
+}
+
+// MARK: - Progress Bar
+
+struct ProgressBar: View {
+    let current: Int
+    let total: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<total, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(index < current ? Theme.Colors.accentBlue : Theme.Colors.border)
+                    .frame(height: 4)
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
+// MARK: - Question Section (shared component)
+
+struct QuestionSection: View {
+    let question: QuestionItem
+    @Binding var selectedIndices: Set<Int>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(question.question)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Theme.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 8) {
+                ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
+                    SwiftUIChoiceCard(
+                        title: option.label,
+                        subtitle: option.description,
+                        isSelected: selectedIndices.contains(index),
+                        onTap: {
+                            if question.multiSelect {
+                                if selectedIndices.contains(index) {
+                                    selectedIndices.remove(index)
+                                } else {
+                                    selectedIndices.insert(index)
+                                }
+                            } else {
+                                selectedIndices = [index]
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Wizard Mode Dialog
+
+struct SwiftUIWizardDialog: View {
+    let questions: [QuestionItem]
+    let onComplete: ([String: Set<Int>]) -> Void
+    let onCancel: () -> Void
+
+    @State private var currentIndex = 0
+    @State private var answers: [String: Set<Int>] = [:]
+
+    private var currentQuestion: QuestionItem { questions[currentIndex] }
+    private var currentAnswer: Set<Int> { answers[currentQuestion.id] ?? [] }
+    private var isFirst: Bool { currentIndex == 0 }
+    private var isLast: Bool { currentIndex == questions.count - 1 }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Progress bar
+            ProgressBar(current: currentIndex + 1, total: questions.count)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 8)
+
+            // Progress text
+            Text("\(currentIndex + 1) of \(questions.count)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Theme.Colors.textMuted)
+                .padding(.bottom, 16)
+
+            // Question content
+            ScrollView {
+                QuestionSection(
+                    question: currentQuestion,
+                    selectedIndices: Binding(
+                        get: { currentAnswer },
+                        set: { answers[currentQuestion.id] = $0 }
+                    )
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+            .frame(maxHeight: 420)
+
+            // Navigation buttons
+            HStack(spacing: 10) {
+                if isFirst {
+                    SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                } else {
+                    SwiftUIModernButton(title: "Back", isPrimary: false, action: {
+                        currentIndex -= 1
+                    })
+                }
+
+                if isLast {
+                    SwiftUIModernButton(title: "Submit", isPrimary: true, action: {
+                        onComplete(answers)
+                    })
+                } else {
+                    SwiftUIModernButton(title: "Next", isPrimary: true, action: {
+                        currentIndex += 1
+                    })
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .background(Color.clear)
+    }
+}
+
+// MARK: - Accordion Mode Dialog
+
+struct AccordionSection: View {
+    let question: QuestionItem
+    let isExpanded: Bool
+    let isAnswered: Bool
+    @Binding var selectedIndices: Set<Int>
+    let onToggle: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            Button(action: onToggle) {
+                HStack {
+                    // Status indicator
+                    ZStack {
+                        Circle()
+                            .fill(isAnswered ? Theme.Colors.accentGreen : Theme.Colors.border)
+                            .frame(width: 20, height: 20)
+
+                        if isAnswered {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+
+                    Text(question.question)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Theme.Colors.textPrimary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isHovered ? Theme.Colors.cardHover : Theme.Colors.cardBackground)
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+
+            // Expanded content
+            if isExpanded {
+                VStack(spacing: 8) {
+                    ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
+                        SwiftUIChoiceCard(
+                            title: option.label,
+                            subtitle: option.description,
+                            isSelected: selectedIndices.contains(index),
+                            onTap: {
+                                if question.multiSelect {
+                                    if selectedIndices.contains(index) {
+                                        selectedIndices.remove(index)
+                                    } else {
+                                        selectedIndices.insert(index)
+                                    }
+                                } else {
+                                    selectedIndices = [index]
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+}
+
+struct SwiftUIAccordionDialog: View {
+    let questions: [QuestionItem]
+    let onComplete: ([String: Set<Int>]) -> Void
+    let onCancel: () -> Void
+
+    @State private var expandedId: String?
+    @State private var answers: [String: Set<Int>] = [:]
+
+    private var answeredCount: Int {
+        answers.values.filter { !$0.isEmpty }.count
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with progress
+            HStack {
+                Text("Questions")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(Theme.Colors.textPrimary)
+
+                Spacer()
+
+                Text("\(answeredCount)/\(questions.count) answered")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.Colors.textSecondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+
+            // Accordion sections
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(questions, id: \.id) { question in
+                        AccordionSection(
+                            question: question,
+                            isExpanded: expandedId == question.id,
+                            isAnswered: !(answers[question.id] ?? []).isEmpty,
+                            selectedIndices: Binding(
+                                get: { answers[question.id] ?? [] },
+                                set: { answers[question.id] = $0 }
+                            ),
+                            onToggle: {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    expandedId = expandedId == question.id ? nil : question.id
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+            .frame(maxHeight: 450)
+
+            // Footer buttons
+            HStack(spacing: 10) {
+                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                SwiftUIModernButton(title: "Submit", isPrimary: true, action: {
+                    onComplete(answers)
+                })
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .background(Color.clear)
+        .onAppear {
+            // Expand first question by default
+            if let first = questions.first {
+                expandedId = first.id
+            }
+        }
+    }
+}
+
+// MARK: - Questionnaire Mode Dialog (all visible)
+
+struct SwiftUIQuestionnaireDialog: View {
+    let questions: [QuestionItem]
+    let onComplete: ([String: Set<Int>]) -> Void
+    let onCancel: () -> Void
+
+    @State private var answers: [String: Set<Int>] = [:]
+
+    private var answeredCount: Int {
+        answers.values.filter { !$0.isEmpty }.count
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with progress
+            HStack {
+                Text("Questions")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(Theme.Colors.textPrimary)
+
+                Spacer()
+
+                Text("\(answeredCount)/\(questions.count) answered")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.Colors.textSecondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+
+            // All questions visible
+            ScrollView {
+                VStack(spacing: 24) {
+                    ForEach(Array(questions.enumerated()), id: \.element.id) { index, question in
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Question number badge
+                            HStack(spacing: 8) {
+                                ZStack {
+                                    Circle()
+                                        .fill(!(answers[question.id] ?? []).isEmpty ? Theme.Colors.accentBlue : Theme.Colors.border)
+                                        .frame(width: 24, height: 24)
+
+                                    Text("\(index + 1)")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+
+                                Text(question.question)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(Theme.Colors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.bottom, 12)
+
+                            // Options
+                            VStack(spacing: 8) {
+                                ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
+                                    SwiftUIChoiceCard(
+                                        title: option.label,
+                                        subtitle: option.description,
+                                        isSelected: (answers[question.id] ?? []).contains(optIndex),
+                                        onTap: {
+                                            var current = answers[question.id] ?? []
+                                            if question.multiSelect {
+                                                if current.contains(optIndex) {
+                                                    current.remove(optIndex)
+                                                } else {
+                                                    current.insert(optIndex)
+                                                }
+                                            } else {
+                                                current = [optIndex]
+                                            }
+                                            answers[question.id] = current
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if index < questions.count - 1 {
+                            Divider()
+                                .background(Theme.Colors.border)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+            .frame(maxHeight: 450)
+
+            // Footer buttons
+            HStack(spacing: 10) {
+                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                SwiftUIModernButton(title: "Submit", isPrimary: true, action: {
+                    onComplete(answers)
                 })
             }
             .padding(.horizontal, 20)
@@ -893,14 +1328,57 @@ class ModernTextField: NSView {
     }
 }
 
+// MARK: - Settings Reader
+
+struct UserSettings {
+    var position: String = "left"
+    var speechRate: Int = 200
+
+    static func load() -> UserSettings {
+        var settings = UserSettings()
+
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return settings
+        }
+
+        let settingsURL = appSupport.appendingPathComponent("SpeakMCP/settings.json")
+        guard let data = fm.contents(atPath: settingsURL.path),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return settings
+        }
+
+        if let position = json["position"] as? String {
+            settings.position = position
+        }
+        if let rate = json["speechRate"] as? Int {
+            settings.speechRate = rate
+        } else if let rate = json["speechRate"] as? Double {
+            settings.speechRate = Int(rate)
+        }
+
+        return settings
+    }
+}
+
 // MARK: - Dialog Manager
 
 class DialogManager {
     static let shared = DialogManager()
     private var clientName = "MCP"
+    private var userSettings = UserSettings.load()
 
     func setClientName(_ name: String) {
         clientName = name
+    }
+
+    func reloadSettings() {
+        userSettings = UserSettings.load()
+    }
+
+    /// Returns the effective position - user setting always overrides passed-in position
+    private func effectivePosition(_ requestedPosition: String) -> String {
+        return userSettings.position
     }
 
     private func buildTitle(_ baseTitle: String) -> String {
@@ -950,6 +1428,7 @@ class DialogManager {
     // MARK: - Confirm Dialog (SwiftUI)
 
     func confirm(_ request: ConfirmRequest) -> ConfirmResponse {
+        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: ConfirmResponse?
@@ -979,7 +1458,7 @@ class DialogManager {
         hostingView.frame = NSRect(x: 8, y: 8, width: windowWidth - 16, height: windowHeight - 16)
         contentView.addSubview(hostingView)
 
-        positionWindow(window, position: request.position)
+        positionWindow(window, position: effectivePosition(request.position))
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -992,11 +1471,12 @@ class DialogManager {
     // MARK: - Choose Dialog (SwiftUI)
 
     func choose(_ request: ChooseRequest) -> ChoiceResponse {
+        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: ChoiceResponse?
         let windowWidth: CGFloat = 420
-        let windowHeight: CGFloat = 480
+        let windowHeight: CGFloat = 600
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
@@ -1031,7 +1511,7 @@ class DialogManager {
         hostingView.frame = NSRect(x: 8, y: 8, width: windowWidth - 16, height: windowHeight - 16)
         contentView.addSubview(hostingView)
 
-        positionWindow(window, position: request.position)
+        positionWindow(window, position: effectivePosition(request.position))
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -1044,59 +1524,91 @@ class DialogManager {
     // MARK: - Text Input Dialog (Full AppKit with Modern Design)
 
     func textInput(_ request: TextInputRequest) -> TextInputResponse {
+        reloadSettings()
         NSApp.setActivationPolicy(.accessory)
 
         var result: TextInputResponse?
-        let windowWidth: CGFloat = 380
-        let windowHeight: CGFloat = 320
+        let windowWidth: CGFloat = 420
+
+        // Calculate prompt height dynamically
+        let promptFont = NSFont.systemFont(ofSize: 13)
+        let promptAttrs: [NSAttributedString.Key: Any] = [.font: promptFont]
+        let promptMaxWidth = windowWidth - 48
+        let promptSize = (request.prompt as NSString).boundingRect(
+            with: NSSize(width: promptMaxWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: promptAttrs
+        )
+        let promptHeight = max(20, ceil(promptSize.height) + 8)
+
+        // Calculate total window height based on content
+        let topPadding: CGFloat = 28
+        let iconSize: CGFloat = 56
+        let iconToTitle: CGFloat = 16
+        let titleHeight: CGFloat = 24
+        let titleToPrompt: CGFloat = 8
+        let promptToInput: CGFloat = 16
+        let inputHeight: CGFloat = 44
+        let inputToButtons: CGFloat = 20
+        let buttonHeight: CGFloat = 48
+        let bottomPadding: CGFloat = 20
+
+        let windowHeight = topPadding + iconSize + iconToTitle + titleHeight + titleToPrompt + promptHeight + promptToInput + inputHeight + inputToButtons + buttonHeight + bottomPadding
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
+        var yPos = windowHeight - topPadding
+
         // Icon
-        let iconBg = NSView(frame: NSRect(x: (windowWidth - 56) / 2, y: windowHeight - 92, width: 56, height: 56))
+        yPos -= iconSize
+        let iconBg = NSView(frame: NSRect(x: (windowWidth - iconSize) / 2, y: yPos, width: iconSize, height: iconSize))
         iconBg.wantsLayer = true
         iconBg.layer?.backgroundColor = Theme.accentBlue.withAlphaComponent(0.15).cgColor
-        iconBg.layer?.cornerRadius = 28
+        iconBg.layer?.cornerRadius = iconSize / 2
         contentView.addSubview(iconBg)
 
-        let iconImage = NSImageView(frame: NSRect(x: (windowWidth - 24) / 2, y: windowHeight - 80, width: 24, height: 24))
+        let iconImage = NSImageView(frame: NSRect(x: (windowWidth - 24) / 2, y: yPos + 16, width: 24, height: 24))
         iconImage.image = NSImage(systemSymbolName: request.hidden ? "lock.fill" : "text.cursor", accessibilityDescription: nil)
         iconImage.contentTintColor = Theme.accentBlue
         contentView.addSubview(iconImage)
 
         // Title
+        yPos -= iconToTitle + titleHeight
         let titleLabel = NSTextField(labelWithString: request.title)
-        titleLabel.frame = NSRect(x: 24, y: windowHeight - 118, width: windowWidth - 48, height: 24)
+        titleLabel.frame = NSRect(x: 24, y: yPos, width: windowWidth - 48, height: titleHeight)
         titleLabel.font = NSFont.systemFont(ofSize: 18, weight: .bold)
         titleLabel.textColor = Theme.textPrimary
         titleLabel.alignment = .center
         contentView.addSubview(titleLabel)
 
-        // Prompt
-        let promptLabel = NSTextField(labelWithString: request.prompt)
-        promptLabel.frame = NSRect(x: 24, y: windowHeight - 142, width: windowWidth - 48, height: 18)
-        promptLabel.font = NSFont.systemFont(ofSize: 13)
+        // Prompt (wrapping text)
+        yPos -= titleToPrompt + promptHeight
+        let promptLabel = NSTextField(wrappingLabelWithString: request.prompt)
+        promptLabel.frame = NSRect(x: 24, y: yPos, width: promptMaxWidth, height: promptHeight)
+        promptLabel.font = promptFont
         promptLabel.textColor = Theme.textSecondary
         promptLabel.alignment = .center
+        promptLabel.maximumNumberOfLines = 0
+        promptLabel.lineBreakMode = .byWordWrapping
         contentView.addSubview(promptLabel)
 
         // Text Field
+        yPos -= promptToInput + inputHeight
         let inputField = StyledTextField(isSecure: request.hidden, defaultValue: request.defaultValue)
-        inputField.frame = NSRect(x: 28, y: windowHeight - 198, width: windowWidth - 56, height: 44)
+        inputField.frame = NSRect(x: 28, y: yPos, width: windowWidth - 56, height: inputHeight)
         contentView.addSubview(inputField)
 
         // Buttons
-        let buttonHeight: CGFloat = 48
         let buttonSpacing: CGFloat = 10
         let sideMargin: CGFloat = 20
         let buttonWidth = (windowWidth - sideMargin * 2 - buttonSpacing - 16) / 2
 
         let cancelButton = ModernButton(title: "Cancel", isPrimary: false)
-        cancelButton.frame = NSRect(x: sideMargin + 8, y: 20, width: buttonWidth, height: buttonHeight)
+        cancelButton.frame = NSRect(x: sideMargin + 8, y: bottomPadding, width: buttonWidth, height: buttonHeight)
         contentView.addSubview(cancelButton)
 
         let submitButton = ModernButton(title: "Submit", isPrimary: true)
-        submitButton.frame = NSRect(x: sideMargin + buttonWidth + buttonSpacing + 8, y: 20, width: buttonWidth, height: buttonHeight)
+        submitButton.frame = NSRect(x: sideMargin + buttonWidth + buttonSpacing + 8, y: bottomPadding, width: buttonWidth, height: buttonHeight)
         contentView.addSubview(submitButton)
 
         submitButton.onClick = {
@@ -1115,7 +1627,7 @@ class DialogManager {
         submitButton.nextKeyView = inputField.textField
         window.initialFirstResponder = inputField.textField
 
-        positionWindow(window, position: request.position)
+        positionWindow(window, position: effectivePosition(request.position))
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -1199,6 +1711,90 @@ class DialogManager {
 
         return SpeakResponse(success: true)
     }
+
+    // MARK: - Multi-Question Dialog
+
+    func questions(_ request: QuestionsRequest) -> QuestionsResponse {
+        reloadSettings()
+        NSApp.setActivationPolicy(.accessory)
+
+        var result: QuestionsResponse?
+        let windowWidth: CGFloat = 460
+        let windowHeight: CGFloat = 650
+
+        let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
+
+        // Convert answers from Set<Int> to response format
+        func buildResponse(answers: [String: Set<Int>], cancelled: Bool) -> QuestionsResponse {
+            var responseAnswers: [String: QuestionsResponse.AnswerValue] = [:]
+            var completedCount = 0
+
+            for question in request.questions {
+                if let indices = answers[question.id], !indices.isEmpty {
+                    completedCount += 1
+                    let labels = indices.sorted().map { question.options[$0].label }
+                    if question.multiSelect {
+                        responseAnswers[question.id] = .multiple(labels)
+                    } else {
+                        responseAnswers[question.id] = .single(labels.first!)
+                    }
+                }
+            }
+
+            return QuestionsResponse(answers: responseAnswers, cancelled: cancelled, completedCount: completedCount)
+        }
+
+        let onComplete: ([String: Set<Int>]) -> Void = { answers in
+            result = buildResponse(answers: answers, cancelled: false)
+            NSApp.stopModal()
+        }
+
+        let onCancel: () -> Void = {
+            result = QuestionsResponse(answers: [:], cancelled: true, completedCount: 0)
+            NSApp.stopModal()
+        }
+
+        // Create appropriate dialog based on mode
+        let hostingView: NSHostingView<AnyView>
+        switch request.mode {
+        case "wizard":
+            hostingView = NSHostingView(rootView: AnyView(
+                SwiftUIWizardDialog(
+                    questions: request.questions,
+                    onComplete: onComplete,
+                    onCancel: onCancel
+                )
+            ))
+        case "accordion":
+            hostingView = NSHostingView(rootView: AnyView(
+                SwiftUIAccordionDialog(
+                    questions: request.questions,
+                    onComplete: onComplete,
+                    onCancel: onCancel
+                )
+            ))
+        default: // "questionnaire"
+            hostingView = NSHostingView(rootView: AnyView(
+                SwiftUIQuestionnaireDialog(
+                    questions: request.questions,
+                    onComplete: onComplete,
+                    onCancel: onCancel
+                )
+            ))
+        }
+
+        hostingView.frame = NSRect(x: 8, y: 8, width: windowWidth - 16, height: windowHeight - 16)
+        contentView.addSubview(hostingView)
+
+        positionWindow(window, position: effectivePosition(request.position))
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        NSApp.runModal(for: window)
+        window.close()
+
+        return result ?? QuestionsResponse(answers: [:], cancelled: true, completedCount: 0)
+    }
 }
 
 // MARK: - Extensions
@@ -1231,18 +1827,47 @@ extension Array {
 
 // MARK: - Main
 
+// MARK: - Pulse Response
+
+struct PulseResponse: Codable {
+    let success: Bool
+}
+
 func main() {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
 
     let args = CommandLine.arguments
-    guard args.count >= 3 else {
-        fputs("Usage: dialog-cli <command> <json>\n", stderr)
-        fputs("Commands: confirm, choose, textInput, notify, speak\n", stderr)
+    guard args.count >= 2 else {
+        fputs("Usage: dialog-cli <command> [json]\n", stderr)
+        fputs("Commands: confirm, choose, textInput, notify, speak, questions, pulse\n", stderr)
         exit(1)
     }
 
     let command = args[1]
+
+    // Handle pulse command separately (no JSON needed)
+    if command == "pulse" {
+        DistributedNotificationCenter.default().postNotificationName(
+            NSNotification.Name("com.speak.pulse"),
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+        let response = PulseResponse(success: true)
+        if let data = try? JSONEncoder().encode(response),
+           let output = String(data: data, encoding: .utf8) {
+            print(output)
+        }
+        exit(0)
+    }
+
+    guard args.count >= 3 else {
+        fputs("Usage: dialog-cli <command> <json>\n", stderr)
+        fputs("Commands: confirm, choose, textInput, notify, speak, questions, pulse\n", stderr)
+        exit(1)
+    }
+
     let jsonInput = args[2]
 
     let decoder = JSONDecoder()
@@ -1300,6 +1925,14 @@ func main() {
             exit(1)
         }
         let response = manager.speak(request)
+        outputData = try? encoder.encode(response)
+
+    case "questions":
+        guard let request = try? decoder.decode(QuestionsRequest.self, from: jsonData) else {
+            fputs("Invalid questions request\n", stderr)
+            exit(1)
+        }
+        let response = manager.questions(request)
         outputData = try? encoder.encode(response)
 
     default:
