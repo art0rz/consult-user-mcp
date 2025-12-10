@@ -167,8 +167,8 @@ struct Theme {
     static let accentGreen = NSColor(red: 0.30, green: 0.85, blue: 0.55, alpha: 1.0)
     static let accentRed = NSColor(red: 0.95, green: 0.35, blue: 0.40, alpha: 1.0)
 
-    static let border = NSColor(white: 0.25, alpha: 1.0)
-    static let inputBackground = NSColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1.0)
+    static let border = NSColor(white: 0.35, alpha: 1.0)
+    static let inputBackground = NSColor(red: 0.16, green: 0.16, blue: 0.18, alpha: 1.0)
 
     static let cornerRadius: CGFloat = 16
     static let buttonRadius: CGFloat = 12
@@ -188,8 +188,46 @@ struct Theme {
         static let accentBlueDark = Color(red: 0.25, green: 0.45, blue: 0.90)
         static let accentGreen = Color(red: 0.30, green: 0.85, blue: 0.55)
         static let accentRed = Color(red: 0.95, green: 0.35, blue: 0.40)
-        static let border = Color(white: 0.25)
-        static let inputBackground = Color(red: 0.08, green: 0.08, blue: 0.10)
+        static let border = Color(white: 0.35)
+        static let inputBackground = Color(red: 0.16, green: 0.16, blue: 0.18)
+    }
+}
+
+// MARK: - Keyboard Hints View
+
+struct KeyboardHint: Identifiable {
+    let id = UUID()
+    let key: String
+    let label: String
+}
+
+struct KeyboardHintsView: View {
+    let hints: [KeyboardHint]
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ForEach(hints) { hint in
+                HStack(spacing: 4) {
+                    Text(hint.key)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundColor(Theme.Colors.textSecondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Theme.Colors.cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(Theme.Colors.border, lineWidth: 1)
+                        )
+                    Text(hint.label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Theme.Colors.textMuted)
+                }
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 
@@ -470,9 +508,15 @@ struct SwiftUIConfirmDialog: View {
             .padding(.bottom, 20)
 
             // Buttons
-            HStack(spacing: 10) {
-                SwiftUIModernButton(title: cancelLabel, isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: confirmLabel, isPrimary: true, action: onConfirm)
+            VStack(spacing: 8) {
+                KeyboardHintsView(hints: [
+                    KeyboardHint(key: "⏎", label: "confirm"),
+                    KeyboardHint(key: "Esc", label: "cancel")
+                ])
+                HStack(spacing: 10) {
+                    SwiftUIModernButton(title: cancelLabel, isPrimary: false, action: onCancel)
+                    SwiftUIModernButton(title: confirmLabel, isPrimary: true, showReturnHint: true, action: onConfirm)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
@@ -535,7 +579,6 @@ class StyledTextField: NSView {
 
     override var mouseDownCanMoveWindow: Bool { false }
     override var acceptsFirstResponder: Bool { true }
-    override var wantsUpdateLayer: Bool { true }
 
     init(isSecure: Bool, defaultValue: String) {
         self.isSecure = isSecure
@@ -545,9 +588,6 @@ class StyledTextField: NSView {
             textField = NSTextField()
         }
         super.init(frame: .zero)
-
-        wantsLayer = true
-        layerContentsRedrawPolicy = .onSetNeedsDisplay
 
         textField.stringValue = defaultValue
         textField.isEditable = true
@@ -755,11 +795,19 @@ struct SwiftUIChooseDialog: View {
     }
 
     private var footerButtons: some View {
-        HStack(spacing: 10) {
-            SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-            SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, showReturnHint: true, action: {
-                onComplete(selectedIndices)
-            })
+        VStack(spacing: 8) {
+            KeyboardHintsView(hints: [
+                KeyboardHint(key: "↑↓", label: "navigate"),
+                KeyboardHint(key: "Space", label: "select"),
+                KeyboardHint(key: "⏎", label: "done"),
+                KeyboardHint(key: "Esc", label: "cancel")
+            ])
+            HStack(spacing: 10) {
+                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, showReturnHint: true, action: {
+                    onComplete(selectedIndices)
+                })
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -926,19 +974,27 @@ struct SwiftUIWizardDialog: View {
             }
 
             // Navigation buttons
-            HStack(spacing: 10) {
-                if isFirst {
-                    SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                } else {
-                    SwiftUIModernButton(title: "Back", isPrimary: false, action: goBack)
-                }
+            VStack(spacing: 8) {
+                KeyboardHintsView(hints: [
+                    KeyboardHint(key: "↑↓", label: "navigate"),
+                    KeyboardHint(key: "Space", label: "select"),
+                    KeyboardHint(key: "⏎", label: isLast ? "done" : "next"),
+                    KeyboardHint(key: "Esc", label: "cancel")
+                ])
+                HStack(spacing: 10) {
+                    if isFirst {
+                        SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                    } else {
+                        SwiftUIModernButton(title: "Back", isPrimary: false, action: goBack)
+                    }
 
-                if isLast {
-                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
-                        onComplete(answers)
-                    })
-                } else {
-                    SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
+                    if isLast {
+                        SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
+                            onComplete(answers)
+                        })
+                    } else {
+                        SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -1190,11 +1246,20 @@ struct SwiftUIAccordionDialog: View {
             }
 
             // Footer buttons
-            HStack(spacing: 10) {
-                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
-                    onComplete(answers)
-                })
+            VStack(spacing: 8) {
+                KeyboardHintsView(hints: [
+                    KeyboardHint(key: "↑↓", label: "navigate"),
+                    KeyboardHint(key: "Space", label: "select"),
+                    KeyboardHint(key: "Tab", label: "next section"),
+                    KeyboardHint(key: "⏎", label: "advance/done"),
+                    KeyboardHint(key: "Esc", label: "cancel")
+                ])
+                HStack(spacing: 10) {
+                    SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                        onComplete(answers)
+                    })
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
@@ -1414,11 +1479,20 @@ struct SwiftUIQuestionnaireDialog: View {
             }
 
             // Footer buttons
-            HStack(spacing: 10) {
-                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
-                    onComplete(answers)
-                })
+            VStack(spacing: 8) {
+                KeyboardHintsView(hints: [
+                    KeyboardHint(key: "↑↓", label: "navigate"),
+                    KeyboardHint(key: "Space", label: "select"),
+                    KeyboardHint(key: "Tab", label: "next question"),
+                    KeyboardHint(key: "⏎", label: "done"),
+                    KeyboardHint(key: "Esc", label: "cancel")
+                ])
+                HStack(spacing: 10) {
+                    SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                        onComplete(answers)
+                    })
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -2126,6 +2200,14 @@ class DialogManager {
         inputField.frame = NSRect(x: 28, y: yPos, width: windowWidth - 56, height: inputHeight)
         contentView.addSubview(inputField)
 
+        // Keyboard hints
+        let hintsLabel = NSTextField(labelWithString: "⏎ submit  •  Esc cancel")
+        hintsLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        hintsLabel.textColor = Theme.textMuted
+        hintsLabel.alignment = .center
+        hintsLabel.frame = NSRect(x: 20, y: bottomPadding + buttonHeight + 8, width: windowWidth - 40, height: 16)
+        contentView.addSubview(hintsLabel)
+
         // Buttons
         let buttonSpacing: CGFloat = 10
         let sideMargin: CGFloat = 20
@@ -2135,7 +2217,7 @@ class DialogManager {
         cancelButton.frame = NSRect(x: sideMargin + 8, y: bottomPadding, width: buttonWidth, height: buttonHeight)
         contentView.addSubview(cancelButton)
 
-        let submitButton = ModernButton(title: "Submit", isPrimary: true)
+        let submitButton = ModernButton(title: "Submit ⏎", isPrimary: true)
         submitButton.frame = NSRect(x: sideMargin + buttonWidth + buttonSpacing + 8, y: bottomPadding, width: buttonWidth, height: buttonHeight)
         contentView.addSubview(submitButton)
 
@@ -2165,7 +2247,22 @@ class DialogManager {
             window.makeFirstResponder(inputField.textField)
         }
 
+        // Handle Enter to submit, Escape to cancel
+        let keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 36 { // Enter/Return
+                result = TextInputResponse(dialogType: "textInput", answer: inputField.textField.stringValue, cancelled: false, dismissed: false, comment: nil)
+                NSApp.stopModal()
+                return nil
+            } else if event.keyCode == 53 { // Escape
+                result = TextInputResponse(dialogType: "textInput", answer: nil, cancelled: true, dismissed: false, comment: nil)
+                NSApp.stopModal()
+                return nil
+            }
+            return event
+        }
+
         NSApp.runModal(for: window)
+        if let monitor = keyMonitor { NSEvent.removeMonitor(monitor) }
         window.close()
 
         return result ?? TextInputResponse(dialogType: "textInput", answer: nil, cancelled: true, dismissed: true, comment: nil)
@@ -2354,9 +2451,25 @@ struct PulseResponse: Codable {
     let success: Bool
 }
 
+func setupEditMenu() {
+    let mainMenu = NSMenu()
+    let editMenuItem = NSMenuItem()
+    editMenuItem.submenu = NSMenu(title: "Edit")
+
+    let editMenu = editMenuItem.submenu!
+    editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+    mainMenu.addItem(editMenuItem)
+    NSApp.mainMenu = mainMenu
+}
+
 func main() {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
+    setupEditMenu()
 
     let args = CommandLine.arguments
     guard args.count >= 2 else {
