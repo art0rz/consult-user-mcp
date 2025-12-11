@@ -119,7 +119,7 @@ class DialogManager {
 
         var result: ChoiceResponse?
         let windowWidth: CGFloat = 420
-        let windowHeight: CGFloat = 520
+        let windowHeight: CGFloat = 560
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 

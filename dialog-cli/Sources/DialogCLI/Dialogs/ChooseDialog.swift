@@ -84,9 +84,10 @@ struct SwiftUIChooseDialog: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 4)
                 .padding(.bottom, 8)
             }
-            .frame(maxHeight: 500)
+            .scrollClipDisabled()
             .onChange(of: focusedIndex) { newIndex in
                 withAnimation(.easeOut(duration: 0.15)) {
                     proxy.scrollTo(newIndex, anchor: .center)

@@ -65,7 +65,7 @@ struct DialogToolbar: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
         }
-        .background(Theme.Colors.cardBackground.opacity(0.5))
+        .background(Theme.Colors.cardBackground)
         .onChange(of: expandedTool) { newTool in
             if newTool == .feedback {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
