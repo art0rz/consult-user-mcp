@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SpeakSettingsApp: App {
+struct ConsultUserMCPApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
@@ -47,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(handlePulseNotification),
-            name: NSNotification.Name("com.speak.pulse"),
+            name: NSNotification.Name("com.consult-user-mcp.pulse"),
             object: nil
         )
     }
@@ -82,9 +82,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         notifyItem.target = self
         debugMenu?.addItem(notifyItem)
 
-        let speakItem = NSMenuItem(title: "Test Speech", action: #selector(testSpeak), keyEquivalent: "5")
-        speakItem.target = self
-        debugMenu?.addItem(speakItem)
+        let ttsItem = NSMenuItem(title: "Test TTS", action: #selector(testTts), keyEquivalent: "5")
+        ttsItem.target = self
+        debugMenu?.addItem(ttsItem)
 
         let shaderItem = NSMenuItem(title: "Test Shader Pulse", action: #selector(testShader), keyEquivalent: "6")
         shaderItem.target = self
@@ -133,8 +133,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Get the executable path and navigate to sibling dialog-cli folder
         let executablePath = Bundle.main.executablePath ?? ""
 
-        // From: /path/to/speak/macos-app/.build/debug/SpeakSettings
-        // To:   /path/to/speak/dialog-cli/dialog-cli
+        // From: /path/to/consult-user-mcp/macos-app/.build/debug/SpeakSettings
+        // To:   /path/to/consult-user-mcp/dialog-cli/dialog-cli
         var path = (executablePath as NSString).deletingLastPathComponent
 
         // Go up from .build/debug or .build/release
@@ -150,7 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Fallback: hardcoded dev path
-        let hardcodedPath = "/Users/jurrejan/Documents/development/mcp/speak/dialog-cli/dialog-cli"
+        let hardcodedPath = "/Users/jurrejan/Documents/development/mcp/consult-user-mcp/dialog-cli/dialog-cli"
         if FileManager.default.fileExists(atPath: hardcodedPath) {
             return hardcodedPath
         }
@@ -226,17 +226,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func testNotify() {
         let json = """
-        {"message":"This is a test notification from Speak MCP.","title":"Notification Test","subtitle":"Debug Mode","sound":true}
+        {"message":"This is a test notification from Consult User MCP.","title":"Notification Test","subtitle":"Debug Mode","sound":true}
         """
         runDialogCli(command: "notify", json: json)
     }
 
-    @objc func testSpeak() {
+    @objc func testTts() {
         let settings = DialogSettings.shared
         let json = """
         {"text":"Hello! This is a test of the speech synthesis feature.","voice":null,"rate":\(Int(settings.speechRate))}
         """
-        runDialogCli(command: "speak", json: json)
+        runDialogCli(command: "tts", json: json)
     }
 
     private var shaderWindow: ShaderOverlayWindow?
@@ -265,7 +265,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.testNotify()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-            self.testSpeak()
+            self.testTts()
         }
     }
 }

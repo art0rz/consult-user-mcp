@@ -13,8 +13,8 @@ import type {
   TextInputResult,
   NotifyOptions,
   NotifyResult,
-  SpeakOptions,
-  SpeakResult,
+  TtsOptions,
+  TtsResult,
   QuestionsOptions,
   QuestionsResult,
 } from "../types.js";
@@ -97,8 +97,8 @@ export class SwiftDialogProvider implements DialogProvider {
     });
   }
 
-  async speak(opts: SpeakOptions): Promise<SpeakResult> {
-    return this.runCli<SpeakResult>("speak", {
+  async tts(opts: TtsOptions): Promise<TtsResult> {
+    return this.runCli<TtsResult>("tts", {
       text: opts.text,
       voice: opts.voice,
       rate: opts.rate,

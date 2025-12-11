@@ -1,4 +1,4 @@
-# speak-mcp-server
+# consult-user-mcp-server
 
 An MCP server for interacting with users through native macOS dialogs and speech.
 
@@ -33,9 +33,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 ```json
 {
   "mcpServers": {
-    "speak": {
+    "consult-user-mcp": {
       "command": "node",
-      "args": ["/path/to/speak-mcp-server/dist/index.js"]
+      "args": ["/path/to/consult-user-mcp-server/dist/index.js"]
     }
   }
 }

@@ -37,8 +37,8 @@ export interface NotifyResult {
   success: boolean;
 }
 
-// Speech result
-export interface SpeakResult {
+// TTS result
+export interface TtsResult {
   success: boolean;
 }
 
@@ -78,8 +78,8 @@ export interface NotifyOptions {
   sound: boolean;
 }
 
-// Options for speech
-export interface SpeakOptions {
+// Options for TTS
+export interface TtsOptions {
   text: string;
   voice?: string;
   rate: number;

@@ -177,7 +177,7 @@ struct InstallGuideView: View {
             let appDir = (bundlePath as NSString).deletingLastPathComponent
             self.serverPath = "\(appDir)/mcp-server/dist/index.js"
         } else {
-            self.serverPath = "/path/to/speak/mcp-server/dist/index.js"
+            self.serverPath = "/path/to/consult-user-mcp/mcp-server/dist/index.js"
         }
     }
 
@@ -401,14 +401,14 @@ struct InstallGuideView: View {
         switch selectedTarget.configFormat {
         case .json:
             return """
-"speak": {
+"consult-user-mcp": {
   "command": "node",
   "args": ["\(actualPath)"]
 }
 """
         case .toml:
             return """
-[mcp_servers.speak]
+[mcp_servers.consult-user-mcp]
 command = "node"
 args = ["\(actualPath)"]
 """
@@ -429,12 +429,12 @@ args = ["\(actualPath)"]
         }
 
         // Check common development paths
-        let devPath = "/Users/jurrejan/Documents/development/mcp/speak/mcp-server/dist/index.js"
+        let devPath = "/Users/jurrejan/Documents/development/mcp/consult-user-mcp/mcp-server/dist/index.js"
         if fm.fileExists(atPath: devPath) {
             return devPath
         }
 
-        return "/path/to/speak/mcp-server/dist/index.js"
+        return "/path/to/consult-user-mcp/mcp-server/dist/index.js"
     }
 
     // MARK: - Actions
@@ -503,8 +503,8 @@ args = ["\(actualPath)"]
         // Ensure mcpServers exists
         var mcpServers = config["mcpServers"] as? [String: Any] ?? [:]
 
-        // Add speak server
-        mcpServers["speak"] = [
+        // Add consult-user-mcp server
+        mcpServers["consult-user-mcp"] = [
             "command": "node",
             "args": [serverPath]
         ]
@@ -528,12 +528,12 @@ args = ["\(actualPath)"]
             content = existingContent
         }
 
-        // Check if speak server already exists
-        if content.contains("[mcp_servers.speak]") {
+        // Check if consult-user-mcp server already exists
+        if content.contains("[mcp_servers.consult-user-mcp]") {
             // Update existing entry - replace the section
-            if let range = content.range(of: #"\[mcp_servers\.speak\][^\[]*"#, options: .regularExpression) {
+            if let range = content.range(of: #"\[mcp_servers\.consult-user-mcp\][^\[]*"#, options: .regularExpression) {
                 let newSection = """
-[mcp_servers.speak]
+[mcp_servers.consult-user-mcp]
 command = "node"
 args = ["\(serverPath)"]
 
@@ -544,7 +544,7 @@ args = ["\(serverPath)"]
             // Add new entry
             let newSection = """
 
-[mcp_servers.speak]
+[mcp_servers.consult-user-mcp]
 command = "node"
 args = ["\(serverPath)"]
 """

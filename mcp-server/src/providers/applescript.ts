@@ -11,8 +11,8 @@ import type {
   TextInputResult,
   NotifyOptions,
   NotifyResult,
-  SpeakOptions,
-  SpeakResult,
+  TtsOptions,
+  TtsResult,
   QuestionsOptions,
   QuestionsResult,
 } from "../types.js";
@@ -243,7 +243,7 @@ export class AppleScriptDialogProvider implements DialogProvider {
     return { success: true };
   }
 
-  async speak(opts: SpeakOptions): Promise<SpeakResult> {
+  async tts(opts: TtsOptions): Promise<TtsResult> {
     const escapedText = opts.text.replace(/"/g, '\\"').replace(/`/g, "\\`");
     let command = `say -r ${opts.rate}`;
 

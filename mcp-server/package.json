@@ -1,5 +1,5 @@
 {
-  "name": "speak-mcp-server",
+  "name": "consult-user-mcp-server",
   "version": "1.0.0",
   "description": "MCP server for macOS native dialogs and text-to-speech",
   "type": "module",

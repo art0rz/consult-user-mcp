@@ -348,9 +348,9 @@ class DialogManager {
                   .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
-    // MARK: - Speak
+    // MARK: - TTS
 
-    func speak(_ request: SpeakRequest) -> SpeakResponse {
+    func tts(_ request: TtsRequest) -> TtsResponse {
         let semaphore = DispatchSemaphore(value: 0)
         let speechDelegate = SpeechCompletionDelegate { semaphore.signal() }
 
@@ -375,7 +375,7 @@ class DialogManager {
         _ = synth
         _ = speechDelegate
 
-        return SpeakResponse(dialogType: "speak", success: true)
+        return TtsResponse(dialogType: "tts", success: true)
     }
 
     // MARK: - Multi-Question Dialog

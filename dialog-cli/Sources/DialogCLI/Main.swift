@@ -38,7 +38,7 @@ static func run() {
     let args = CommandLine.arguments
     guard args.count >= 2 else {
         fputs("Usage: dialog-cli <command> [json]\n", stderr)
-        fputs("Commands: confirm, choose, textInput, notify, speak, questions, pulse\n", stderr)
+        fputs("Commands: confirm, choose, textInput, notify, tts, questions, pulse\n", stderr)
         exit(1)
     }
 
@@ -47,7 +47,7 @@ static func run() {
     // Handle pulse command separately (no JSON needed)
     if command == "pulse" {
         DistributedNotificationCenter.default().postNotificationName(
-            NSNotification.Name("com.speak.pulse"),
+            NSNotification.Name("com.consult-user-mcp.pulse"),
             object: nil,
             userInfo: nil,
             deliverImmediately: true
@@ -62,7 +62,7 @@ static func run() {
 
     guard args.count >= 3 else {
         fputs("Usage: dialog-cli <command> <json>\n", stderr)
-        fputs("Commands: confirm, choose, textInput, notify, speak, questions, pulse\n", stderr)
+        fputs("Commands: confirm, choose, textInput, notify, tts, questions, pulse\n", stderr)
         exit(1)
     }
 
@@ -122,12 +122,12 @@ static func run() {
         let response = manager.notify(request)
         outputData = try? encoder.encode(response)
 
-    case "speak":
-        guard let request = try? decoder.decode(SpeakRequest.self, from: jsonData) else {
-            fputs("Invalid speak request\n", stderr)
+    case "tts":
+        guard let request = try? decoder.decode(TtsRequest.self, from: jsonData) else {
+            fputs("Invalid tts request\n", stderr)
             exit(1)
         }
-        let response = manager.speak(request)
+        let response = manager.tts(request)
         outputData = try? encoder.encode(response)
 
     case "questions":

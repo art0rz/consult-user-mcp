@@ -68,7 +68,7 @@ struct NotifyResponse: Codable {
     let success: Bool
 }
 
-struct SpeakResponse: Codable {
+struct TtsResponse: Codable {
     let dialogType: String
     let success: Bool
 }

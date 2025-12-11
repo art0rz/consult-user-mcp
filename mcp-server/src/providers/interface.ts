@@ -7,8 +7,8 @@ import type {
   TextInputResult,
   NotifyOptions,
   NotifyResult,
-  SpeakOptions,
-  SpeakResult,
+  TtsOptions,
+  TtsResult,
   QuestionsOptions,
   QuestionsResult,
 } from "../types.js";
@@ -47,7 +47,7 @@ export interface DialogProvider {
   /**
    * Speak text aloud using text-to-speech.
    */
-  speak(opts: SpeakOptions): Promise<SpeakResult>;
+  tts(opts: TtsOptions): Promise<TtsResult>;
 
   /**
    * Display multiple questions in a single dialog.

@@ -32,7 +32,7 @@ struct NotifyRequest: Codable {
     let sound: Bool
 }
 
-struct SpeakRequest: Codable {
+struct TtsRequest: Codable {
     let text: String
     let voice: String?
     let rate: Int

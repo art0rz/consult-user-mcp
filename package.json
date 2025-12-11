@@ -1,5 +1,5 @@
 {
-  "name": "speak-mcp",
+  "name": "consult-user-mcp",
   "private": true,
   "description": "Native macOS dialog system for MCP servers",
   "scripts": {

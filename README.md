@@ -1,10 +1,10 @@
-# Speak MCP
+# Consult User MCP
 
 Native macOS dialog system for MCP (Model Context Protocol) servers.
 
 ## Install
 
-1. Download **Speak MCP.app.zip** from [Releases](../../releases)
+1. Download **Consult User MCP.app.zip** from [Releases](../../releases)
 2. Unzip and drag to `/Applications`
 3. Launch it - a menu bar icon appears
 4. Add the MCP server to Claude Code:
@@ -12,9 +12,9 @@ Native macOS dialog system for MCP (Model Context Protocol) servers.
 ```json
 {
   "mcpServers": {
-    "speak": {
+    "consult-user-mcp": {
       "command": "node",
-      "args": ["/Applications/Speak MCP.app/Contents/Resources/mcp-server/dist/index.js"]
+      "args": ["/Applications/Consult User MCP.app/Contents/Resources/mcp-server/dist/index.js"]
     }
   }
 }
@@ -27,16 +27,16 @@ pnpm install
 pnpm build
 ```
 
-Creates `Speak MCP.app` in project root.
+Creates `Consult User MCP.app` in project root.
 
 ## Structure
 
 ```
-speak/
+consult-user-mcp/
 ├── dialog-cli/          # Native Swift CLI for dialogs
 ├── mcp-server/          # MCP server (TypeScript)
 ├── macos-app/           # SwiftUI menu bar app source
-└── Speak MCP.app        # Built app bundle
+└── Consult User MCP.app # Built app bundle
 ```
 
 ## MCP Tools
@@ -45,4 +45,4 @@ speak/
 - `ask_multiple_choice` - List picker
 - `ask_text_input` - Text input
 - `notify_user` - System notification
-- `speak_text` - Text-to-speech
+- `tts` - Text-to-speech

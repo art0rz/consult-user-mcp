@@ -4,7 +4,7 @@ import { z } from "zod";
 import { SwiftDialogProvider } from "./providers/swift.js";
 import type { DialogPosition, QuestionsMode } from "./types.js";
 
-const server = new McpServer({ name: "speak-mcp-server", version: "1.0.0" });
+const server = new McpServer({ name: "consult-user-mcp-server", version: "1.0.0" });
 const provider = new SwiftDialogProvider();
 const pos = z.enum(["left", "right", "center"]).default("left");
 
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   provider.setClientName(server.server.getClientVersion()?.name ?? "MCP");
-  console.error("Speak MCP Server running on stdio");
+  console.error("Consult User MCP Server running on stdio");
 }
 
 main().catch((e) => { console.error("Server error:", e); process.exit(1); });
