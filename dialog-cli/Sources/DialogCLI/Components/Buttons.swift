@@ -83,7 +83,7 @@ class FocusableButtonView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window != nil {
-            FocusManager.shared.register(self)
+            FocusManager.shared.registerButton(self)
         } else {
             FocusManager.shared.unregister(self)
         }

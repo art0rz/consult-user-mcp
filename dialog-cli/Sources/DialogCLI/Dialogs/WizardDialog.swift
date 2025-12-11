@@ -181,8 +181,8 @@ struct SwiftUIWizardDialog: View {
         }
         .onChange(of: currentIndex) { _ in
             focusedOptionIndex = 0
-            // Focus first element (sorted by position - top of screen first)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Focus first element (delay to let view tree update)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 FocusManager.shared.focusFirst()
             }
         }

@@ -135,29 +135,30 @@ struct DialogContainer<Content: View>: View {
 
     private func setupKeyboardNavigation() {
         keyboardMonitor = KeyboardNavigationMonitor { keyCode, modifiers in
-            // Handle navigation keys globally via FocusManager
+            // Let custom handler try first (allows dialogs to override Tab behavior)
+            if let handler = keyHandler, handler(keyCode, modifiers) {
+                return true
+            }
+
+            // Default navigation via FocusManager
             switch keyCode {
-            case 48: // Tab
+            case 48: // Tab - navigate all elements (content + buttons)
                 if modifiers.contains(.shift) {
                     FocusManager.shared.focusPrevious()
                 } else {
                     FocusManager.shared.focusNext()
                 }
                 return true
-            case 125: // Down arrow
-                FocusManager.shared.focusNext()
+            case 125: // Down arrow - content only (excludes buttons)
+                FocusManager.shared.focusNextContent()
                 return true
-            case 126: // Up arrow
-                FocusManager.shared.focusPrevious()
+            case 126: // Up arrow - content only (excludes buttons)
+                FocusManager.shared.focusPreviousContent()
                 return true
             default:
                 break
             }
 
-            // Let custom handler try (for Enter/Escape/etc)
-            if let handler = keyHandler, handler(keyCode, modifiers) {
-                return true
-            }
             return false
         }
     }

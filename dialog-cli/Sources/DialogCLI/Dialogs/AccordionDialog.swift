@@ -239,7 +239,13 @@ struct SwiftUIAccordionDialog: View {
                 expandedId = first.id
             }
         }
-        .onChange(of: expandedId) { _ in focusedOptionIndex = 0 }
+        .onChange(of: expandedId) { _ in
+            focusedOptionIndex = 0
+            // Focus first element in expanded section (delay must exceed animation duration)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                FocusManager.shared.focusFirst()
+            }
+        }
     }
 
     private func toggleExpanded(_ questionId: String) {
@@ -268,7 +274,6 @@ struct SwiftUIAccordionDialog: View {
     }
 
     private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
-        // Navigation (Tab, arrows) and Space handled by FocusManager + focused views
         switch keyCode {
         case 53: // ESC
             onCancel()
@@ -278,6 +283,41 @@ struct SwiftUIAccordionDialog: View {
                 onComplete(answers)
             }
             return true
+        case 48: // Tab - switch sections, then to buttons
+            if modifiers.contains(.shift) {
+                // Shift+Tab: go to previous section
+                if let currentId = expandedId,
+                   let currentIdx = questions.firstIndex(where: { $0.id == currentId }),
+                   currentIdx > 0 {
+                    let prevIdx = currentIdx - 1
+                    if reduceMotion {
+                        expandedId = questions[prevIdx].id
+                    } else {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            expandedId = questions[prevIdx].id
+                        }
+                    }
+                    return true
+                }
+            } else {
+                // Tab: go to next section, or to buttons if at last section
+                if let currentId = expandedId,
+                   let currentIdx = questions.firstIndex(where: { $0.id == currentId }) {
+                    if currentIdx < questions.count - 1 {
+                        let nextIdx = currentIdx + 1
+                        if reduceMotion {
+                            expandedId = questions[nextIdx].id
+                        } else {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                expandedId = questions[nextIdx].id
+                            }
+                        }
+                        return true
+                    }
+                    // At last section - fall through to default Tab to reach buttons
+                }
+            }
+            return false // Let default Tab behavior handle buttons
         default:
             return false
         }
