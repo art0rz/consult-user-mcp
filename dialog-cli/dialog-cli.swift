@@ -231,6 +231,137 @@ struct KeyboardHintsView: View {
     }
 }
 
+// MARK: - Dialog Header (Composable)
+
+struct DialogHeader: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String?
+
+    init(icon: String, title: String, subtitle: String? = nil, iconColor: Color = Theme.Colors.accentBlue) {
+        self.icon = icon
+        self.iconColor = iconColor
+        self.title = title
+        self.subtitle = subtitle
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 56, height: 56)
+
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(iconColor)
+            }
+            .padding(.top, 28)
+            .padding(.bottom, 16)
+
+            Text(title)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Theme.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+            }
+        }
+    }
+}
+
+// MARK: - Dialog Footer (Composable)
+
+struct DialogFooter: View {
+    let hints: [KeyboardHint]
+    let buttons: [DialogButton]
+
+    struct DialogButton: Identifiable {
+        let id = UUID()
+        let title: String
+        let isPrimary: Bool
+        let isDestructive: Bool
+        let isDisabled: Bool
+        let showReturnHint: Bool
+        let action: () -> Void
+
+        init(_ title: String, isPrimary: Bool = false, isDestructive: Bool = false, isDisabled: Bool = false, showReturnHint: Bool = false, action: @escaping () -> Void) {
+            self.title = title
+            self.isPrimary = isPrimary
+            self.isDestructive = isDestructive
+            self.isDisabled = isDisabled
+            self.showReturnHint = showReturnHint
+            self.action = action
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            KeyboardHintsView(hints: hints)
+            HStack(spacing: 10) {
+                ForEach(buttons) { button in
+                    SwiftUIModernButton(
+                        title: button.title,
+                        isPrimary: button.isPrimary,
+                        isDestructive: button.isDestructive,
+                        isDisabled: button.isDisabled,
+                        showReturnHint: button.showReturnHint,
+                        action: button.action
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+}
+
+// MARK: - Dialog Container (Composable)
+
+struct DialogContainer<Content: View>: View {
+    let onEscape: (() -> Void)?
+    let keyHandler: ((UInt16, NSEvent.ModifierFlags) -> Bool)?
+    let content: Content
+
+    @State private var keyboardMonitor: KeyboardNavigationMonitor?
+
+    init(
+        onEscape: (() -> Void)? = nil,
+        keyHandler: ((UInt16, NSEvent.ModifierFlags) -> Bool)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.onEscape = onEscape
+        self.keyHandler = keyHandler
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .background(Color.clear)
+            .onAppear { setupKeyboardNavigation() }
+            .onDisappear { keyboardMonitor = nil }
+    }
+
+    private func setupKeyboardNavigation() {
+        keyboardMonitor = KeyboardNavigationMonitor { keyCode, modifiers in
+            // Let custom handler try first
+            if let handler = keyHandler, handler(keyCode, modifiers) {
+                return true
+            }
+            return false
+        }
+    }
+}
+
 // MARK: - SwiftUI Choice Card
 
 struct SwiftUIChoiceCard: View {
@@ -469,115 +600,31 @@ struct SwiftUIConfirmDialog: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    @State private var keyboardMonitor: KeyboardNavigationMonitor?
-
     var body: some View {
-        VStack(spacing: 0) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(Theme.Colors.accentBlue.opacity(0.15))
-                    .frame(width: 56, height: 56)
-
-                Image(systemName: "questionmark")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(Theme.Colors.accentBlue)
-            }
-            .padding(.top, 28)
-            .padding(.bottom, 16)
-
-            // Title
-            Text(title)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Theme.Colors.textPrimary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 12)
-
-            // Scrollable Message
-            ScrollView {
-                Text(message)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(Theme.Colors.textSecondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-            }
-            .frame(maxHeight: 300)
-            .padding(.bottom, 20)
-
-            // Buttons
-            VStack(spacing: 8) {
-                KeyboardHintsView(hints: [
-                    KeyboardHint(key: "⏎", label: "confirm"),
-                    KeyboardHint(key: "Esc", label: "cancel")
-                ])
-                HStack(spacing: 10) {
-                    SwiftUIModernButton(title: cancelLabel, isPrimary: false, action: onCancel)
-                    SwiftUIModernButton(title: confirmLabel, isPrimary: true, showReturnHint: true, action: onConfirm)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-        }
-        .background(Color.clear)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text("\(title). \(message)"))
-        .onAppear { setupKeyboardNavigation() }
-        .onDisappear { keyboardMonitor = nil }
-    }
-
-    private func setupKeyboardNavigation() {
-        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
+        DialogContainer(keyHandler: { keyCode, _ in
             if keyCode == 36 { // Enter/Return - confirm
                 onConfirm()
                 return true
             }
             return false
-        }
-    }
-}
+        }) {
+            VStack(spacing: 0) {
+                DialogHeader(icon: "questionmark", title: title, subtitle: message)
+                    .padding(.bottom, 12)
 
-// MARK: - Hybrid Text Input Dialog (SwiftUI + AppKit)
-
-struct SwiftUITextInputDialogHeader: View {
-    let title: String
-    let prompt: String
-    let isSecure: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(Theme.Colors.accentBlue.opacity(0.15))
-                    .frame(width: 56, height: 56)
-
-                Image(systemName: isSecure ? "lock.fill" : "text.cursor")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(Theme.Colors.accentBlue)
+                DialogFooter(
+                    hints: [
+                        KeyboardHint(key: "⏎", label: "confirm"),
+                        KeyboardHint(key: "Esc", label: "cancel")
+                    ],
+                    buttons: [
+                        .init(cancelLabel, action: onCancel),
+                        .init(confirmLabel, isPrimary: true, showReturnHint: true, action: onConfirm)
+                    ]
+                )
             }
-            .padding(.top, 28)
-            .padding(.bottom, 16)
-
-            // Title
-            Text(title)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Theme.Colors.textPrimary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-
-            // Prompt
-            Text(prompt)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(Theme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-                .padding(.top, 4)
-                .padding(.bottom, 16)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text("\(title). \(message)"))
         }
     }
 }
@@ -704,13 +751,13 @@ extension StyledTextField: NSTextFieldDelegate {
 
 class KeyboardNavigationMonitor {
     private var monitor: Any?
-    private let onKeyDown: (UInt16) -> Bool
+    private let onKeyDown: (UInt16, NSEvent.ModifierFlags) -> Bool
 
-    init(onKeyDown: @escaping (UInt16) -> Bool) {
+    init(onKeyDown: @escaping (UInt16, NSEvent.ModifierFlags) -> Bool) {
         self.onKeyDown = onKeyDown
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
-            if self.onKeyDown(event.keyCode) {
+            if self.onKeyDown(event.keyCode, event.modifierFlags) {
                 return nil // Consume event
             }
             return event
@@ -737,7 +784,6 @@ struct SwiftUIChooseDialog: View {
 
     @State private var selectedIndices: Set<Int> = []
     @State private var focusedIndex: Int = 0
-    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     init(prompt: String, choices: [String], descriptions: [String]?, allowMultiple: Bool, defaultSelection: String?, onComplete: @escaping (Set<Int>) -> Void, onCancel: @escaping () -> Void) {
         self.prompt = prompt
@@ -755,17 +801,16 @@ struct SwiftUIChooseDialog: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerView
-            choicesScrollView
-            footerButtons
+        DialogContainer(keyHandler: handleKeyPress) {
+            VStack(spacing: 0) {
+                headerView
+                choicesScrollView
+                footerView
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(prompt))
+            .accessibilityHint(allowMultiple ? "Select one or more options. Use arrow keys to navigate, Space to select." : "Select one option. Use arrow keys to navigate, Space to select.")
         }
-        .background(Color.clear)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(prompt))
-        .accessibilityHint(allowMultiple ? "Select one or more options. Use arrow keys to navigate, Space to select." : "Select one option. Use arrow keys to navigate, Space to select.")
-        .onAppear { setupKeyboardNavigation() }
-        .onDisappear { keyboardMonitor = nil }
     }
 
     private var headerView: some View {
@@ -808,49 +853,44 @@ struct SwiftUIChooseDialog: View {
         }
     }
 
-    private var footerButtons: some View {
-        VStack(spacing: 8) {
-            KeyboardHintsView(hints: [
+    private var footerView: some View {
+        DialogFooter(
+            hints: [
                 KeyboardHint(key: "↑↓", label: "navigate"),
                 KeyboardHint(key: "Space", label: "select"),
                 KeyboardHint(key: "⏎", label: "done"),
                 KeyboardHint(key: "Esc", label: "cancel")
-            ])
-            HStack(spacing: 10) {
-                SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, showReturnHint: true, action: {
-                    onComplete(selectedIndices)
-                })
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+            ],
+            buttons: [
+                .init("Cancel", action: onCancel),
+                .init("Done", isPrimary: true, isDisabled: selectedIndices.isEmpty, showReturnHint: true, action: { onComplete(selectedIndices) })
+            ]
+        )
     }
 
-    private func setupKeyboardNavigation() {
-        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
-            switch keyCode {
-            case 125, 48: // Down arrow or Tab
-                if focusedIndex < choices.count - 1 {
-                    focusedIndex += 1
-                }
-                return true
-            case 126: // Up arrow
-                if focusedIndex > 0 {
-                    focusedIndex -= 1
-                }
-                return true
-            case 49: // Space - toggle selection
-                toggleSelection(at: focusedIndex)
-                return true
-            case 36: // Enter/Return - confirm if selection made
-                if !selectedIndices.isEmpty {
-                    onComplete(selectedIndices)
-                }
-                return true
-            default:
-                return false
+    private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        switch keyCode {
+        case 48: // Tab
+            if modifiers.contains(.shift) {
+                if focusedIndex > 0 { focusedIndex -= 1 }
+            } else {
+                if focusedIndex < choices.count - 1 { focusedIndex += 1 }
             }
+            return true
+        case 125: // Down arrow
+            if focusedIndex < choices.count - 1 { focusedIndex += 1 }
+            return true
+        case 126: // Up arrow
+            if focusedIndex > 0 { focusedIndex -= 1 }
+            return true
+        case 49: // Space - toggle selection
+            toggleSelection(at: focusedIndex)
+            return true
+        case 36: // Enter/Return - confirm if selection made
+            if !selectedIndices.isEmpty { onComplete(selectedIndices) }
+            return true
+        default:
+            return false
         }
     }
 
@@ -944,7 +984,6 @@ struct SwiftUIWizardDialog: View {
     @State private var currentIndex = 0
     @State private var answers: [String: Set<Int>] = [:]
     @State private var focusedOptionIndex: Int = 0
-    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     private var currentQuestion: QuestionItem { questions[currentIndex] }
     private var currentAnswer: Set<Int> { answers[currentQuestion.id] ?? [] }
@@ -952,108 +991,107 @@ struct SwiftUIWizardDialog: View {
     private var isLast: Bool { currentIndex == questions.count - 1 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Progress bar
-            ProgressBar(current: currentIndex + 1, total: questions.count)
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 8)
-
-            // Progress text
-            Text("\(currentIndex + 1) of \(questions.count)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Theme.Colors.textMuted)
-                .padding(.bottom, 16)
-
-            // Question content
-            ScrollViewReader { proxy in
-                ScrollView {
-                    QuestionSection(
-                        question: currentQuestion,
-                        selectedIndices: Binding(
-                            get: { currentAnswer },
-                            set: { answers[currentQuestion.id] = $0 }
-                        ),
-                        focusedIndex: $focusedOptionIndex
-                    )
+        DialogContainer(keyHandler: handleKeyPress) {
+            VStack(spacing: 0) {
+                // Progress bar
+                ProgressBar(current: currentIndex + 1, total: questions.count)
                     .padding(.horizontal, 20)
+                    .padding(.top, 20)
                     .padding(.bottom, 8)
-                }
-                .frame(maxHeight: 420)
-                .onChange(of: focusedOptionIndex) { newIndex in
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(newIndex, anchor: .center)
-                    }
-                }
-            }
 
-            // Navigation buttons
-            VStack(spacing: 8) {
-                KeyboardHintsView(hints: [
-                    KeyboardHint(key: "↑↓", label: "navigate"),
-                    KeyboardHint(key: "Space", label: "select"),
-                    KeyboardHint(key: "⏎", label: isLast ? "done" : "next"),
-                    KeyboardHint(key: "Esc", label: "cancel")
-                ])
-                HStack(spacing: 10) {
-                    if isFirst {
-                        SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                    } else {
-                        SwiftUIModernButton(title: "Back", isPrimary: false, action: goBack)
-                    }
+                // Progress text
+                Text("\(currentIndex + 1) of \(questions.count)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.Colors.textMuted)
+                    .padding(.bottom, 16)
 
-                    if isLast {
-                        SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
-                            onComplete(answers)
-                        })
-                    } else {
-                        SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
+                // Question content
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        QuestionSection(
+                            question: currentQuestion,
+                            selectedIndices: Binding(
+                                get: { currentAnswer },
+                                set: { answers[currentQuestion.id] = $0 }
+                            ),
+                            focusedIndex: $focusedOptionIndex
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                    }
+                    .frame(maxHeight: 420)
+                    .onChange(of: focusedOptionIndex) { newIndex in
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo(newIndex, anchor: .center)
+                        }
                     }
                 }
+
+                // Navigation buttons
+                VStack(spacing: 8) {
+                    KeyboardHintsView(hints: [
+                        KeyboardHint(key: "↑↓", label: "navigate"),
+                        KeyboardHint(key: "Space", label: "select"),
+                        KeyboardHint(key: "⏎", label: isLast ? "done" : "next"),
+                        KeyboardHint(key: "Esc", label: "cancel")
+                    ])
+                    HStack(spacing: 10) {
+                        if isFirst {
+                            SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                        } else {
+                            SwiftUIModernButton(title: "Back", isPrimary: false, action: goBack)
+                        }
+
+                        if isLast {
+                            SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
+                                onComplete(answers)
+                            })
+                        } else {
+                            SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
         }
-        .background(Color.clear)
-        .onAppear { setupKeyboardNavigation() }
-        .onDisappear { keyboardMonitor = nil }
         .onChange(of: currentIndex) { _ in focusedOptionIndex = 0 }
     }
 
-    private func setupKeyboardNavigation() {
-        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
-            switch keyCode {
-            case 125, 48: // Down arrow or Tab
-                if focusedOptionIndex < currentQuestion.options.count - 1 {
-                    focusedOptionIndex += 1
-                }
-                return true
-            case 126: // Up arrow
-                if focusedOptionIndex > 0 {
-                    focusedOptionIndex -= 1
-                }
-                return true
-            case 49: // Space - toggle selection
-                toggleSelection(at: focusedOptionIndex)
-                return true
-            case 36: // Enter/Return - next or complete
-                if !currentAnswer.isEmpty {
-                    if isLast {
-                        onComplete(answers)
-                    } else {
-                        goNext()
-                    }
-                }
-                return true
-            case 124: // Right arrow - next question
-                if !isLast && !currentAnswer.isEmpty { goNext() }
-                return true
-            case 123: // Left arrow - previous question
-                if !isFirst { goBack() }
-                return true
-            default:
-                return false
+    private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        switch keyCode {
+        case 53: // ESC
+            onCancel()
+            return true
+        case 48: // Tab
+            if modifiers.contains(.shift) {
+                if focusedOptionIndex > 0 { focusedOptionIndex -= 1 }
+            } else {
+                if focusedOptionIndex < currentQuestion.options.count - 1 { focusedOptionIndex += 1 }
             }
+            return true
+        case 125: // Down arrow
+            if focusedOptionIndex < currentQuestion.options.count - 1 { focusedOptionIndex += 1 }
+            return true
+        case 126: // Up arrow
+            if focusedOptionIndex > 0 { focusedOptionIndex -= 1 }
+            return true
+        case 49: // Space - toggle selection
+            toggleSelection(at: focusedOptionIndex)
+            return true
+        case 36: // Enter/Return - next or complete
+            if !currentAnswer.isEmpty {
+                if isLast { onComplete(answers) } else { goNext() }
+            }
+            return true
+        case 124: // Right arrow - next question
+            if !isLast && !currentAnswer.isEmpty { goNext() }
+            return true
+        case 123: // Left arrow - previous question
+            if !isFirst { goBack() }
+            return true
+        default:
+            return false
         }
     }
 
@@ -1197,7 +1235,6 @@ struct SwiftUIAccordionDialog: View {
     @State private var expandedId: String?
     @State private var answers: [String: Set<Int>] = [:]
     @State private var focusedOptionIndex: Int = 0
-    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     private var answeredCount: Int {
         answers.values.filter { !$0.isEmpty }.count
@@ -1208,84 +1245,82 @@ struct SwiftUIAccordionDialog: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with progress
-            HStack {
-                Text("Questions")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(Theme.Colors.textPrimary)
+        DialogContainer(keyHandler: handleKeyPress) {
+            VStack(spacing: 0) {
+                // Header with progress
+                HStack {
+                    Text("Questions")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(Theme.Colors.textPrimary)
 
-                Spacer()
+                    Spacer()
 
-                Text("\(answeredCount)/\(questions.count) answered")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Theme.Colors.textSecondary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
+                    Text("\(answeredCount)/\(questions.count) answered")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
 
-            // Accordion sections
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(questions, id: \.id) { question in
-                            AccordionSection(
-                                question: question,
-                                isExpanded: expandedId == question.id,
-                                isAnswered: !(answers[question.id] ?? []).isEmpty,
-                                selectedIndices: Binding(
-                                    get: { answers[question.id] ?? [] },
-                                    set: { answers[question.id] = $0 }
-                                ),
-                                focusedIndex: Binding(
-                                    get: { expandedId == question.id ? focusedOptionIndex : -1 },
-                                    set: { if expandedId == question.id { focusedOptionIndex = $0 } }
-                                ),
-                                onToggle: { toggleExpanded(question.id) },
-                                onAutoAdvance: { advanceToNextSection(from: question.id) }
-                            )
-                            .id(question.id)
+                // Accordion sections
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(questions, id: \.id) { question in
+                                AccordionSection(
+                                    question: question,
+                                    isExpanded: expandedId == question.id,
+                                    isAnswered: !(answers[question.id] ?? []).isEmpty,
+                                    selectedIndices: Binding(
+                                        get: { answers[question.id] ?? [] },
+                                        set: { answers[question.id] = $0 }
+                                    ),
+                                    focusedIndex: Binding(
+                                        get: { expandedId == question.id ? focusedOptionIndex : -1 },
+                                        set: { if expandedId == question.id { focusedOptionIndex = $0 } }
+                                    ),
+                                    onToggle: { toggleExpanded(question.id) },
+                                    onAutoAdvance: { advanceToNextSection(from: question.id) }
+                                )
+                                .id(question.id)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                    }
+                    .frame(maxHeight: 450)
+                    .onChange(of: focusedOptionIndex) { newIndex in
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo(newIndex, anchor: .center)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
                 }
-                .frame(maxHeight: 450)
-                .onChange(of: focusedOptionIndex) { newIndex in
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(newIndex, anchor: .center)
+
+                // Footer buttons
+                VStack(spacing: 8) {
+                    KeyboardHintsView(hints: [
+                        KeyboardHint(key: "↑↓", label: "navigate"),
+                        KeyboardHint(key: "Space", label: "select"),
+                        KeyboardHint(key: "Tab", label: "section"),
+                        KeyboardHint(key: "⏎", label: "done")
+                    ])
+                    HStack(spacing: 10) {
+                        SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                        SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                            onComplete(answers)
+                        })
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
-
-            // Footer buttons
-            VStack(spacing: 8) {
-                KeyboardHintsView(hints: [
-                    KeyboardHint(key: "↑↓", label: "navigate"),
-                    KeyboardHint(key: "Space", label: "select"),
-                    KeyboardHint(key: "Tab", label: "next section"),
-                    KeyboardHint(key: "⏎", label: "advance/done"),
-                    KeyboardHint(key: "Esc", label: "cancel")
-                ])
-                HStack(spacing: 10) {
-                    SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
-                        onComplete(answers)
-                    })
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
         }
-        .background(Color.clear)
         .onAppear {
             if let first = questions.first {
                 expandedId = first.id
             }
-            setupKeyboardNavigation()
         }
-        .onDisappear { keyboardMonitor = nil }
         .onChange(of: expandedId) { _ in focusedOptionIndex = 0 }
     }
 
@@ -1314,61 +1349,62 @@ struct SwiftUIAccordionDialog: View {
         // If last question, stay expanded (user can click Done)
     }
 
-    private func setupKeyboardNavigation() {
-        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
-            guard let question = expandedQuestion else {
-                // No section expanded - Tab opens first, Enter completes if any answers
-                if keyCode == 48, let first = questions.first {
-                    toggleExpanded(first.id)
-                    return true
-                }
-                if keyCode == 36 && answeredCount > 0 {
-                    onComplete(answers)
-                    return true
-                }
-                return false
-            }
+    private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        // ESC to cancel
+        if keyCode == 53 {
+            onCancel()
+            return true
+        }
 
-            switch keyCode {
-            case 125: // Down arrow
-                if focusedOptionIndex < question.options.count - 1 {
-                    focusedOptionIndex += 1
+        guard let question = expandedQuestion else {
+            // No section expanded - Tab opens first/last, Enter completes if any answers
+            if keyCode == 48 {
+                if modifiers.contains(.shift) {
+                    if let last = questions.last { toggleExpanded(last.id) }
+                } else {
+                    if let first = questions.first { toggleExpanded(first.id) }
                 }
                 return true
-            case 126: // Up arrow
-                if focusedOptionIndex > 0 {
-                    focusedOptionIndex -= 1
-                }
+            }
+            if keyCode == 36 && answeredCount > 0 {
+                onComplete(answers)
                 return true
-            case 49: // Space - toggle selection
-                toggleSelection(for: question, at: focusedOptionIndex)
-                return true
-            case 36: // Enter/Return - advance or complete
-                // If current question is answered, advance to next
-                let currentAnswered = !(answers[question.id] ?? []).isEmpty
-                if currentAnswered {
-                    if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
-                        let nextIdx = idx + 1
-                        if nextIdx < questions.count {
-                            advanceToNextSection(from: question.id)
-                            return true
-                        }
+            }
+            return false
+        }
+
+        switch keyCode {
+        case 125: // Down arrow
+            if focusedOptionIndex < question.options.count - 1 { focusedOptionIndex += 1 }
+            return true
+        case 126: // Up arrow
+            if focusedOptionIndex > 0 { focusedOptionIndex -= 1 }
+            return true
+        case 49: // Space - toggle selection
+            toggleSelection(for: question, at: focusedOptionIndex)
+            return true
+        case 36: // Enter/Return - advance or complete
+            let currentAnswered = !(answers[question.id] ?? []).isEmpty
+            if currentAnswered {
+                if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
+                    if idx + 1 < questions.count {
+                        advanceToNextSection(from: question.id)
+                        return true
                     }
                 }
-                // Last section or not answered - complete if any answers
-                if answeredCount > 0 {
-                    onComplete(answers)
-                }
-                return true
-            case 48: // Tab - next accordion section
-                if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
-                    let nextIdx = (idx + 1) % questions.count
-                    toggleExpanded(questions[nextIdx].id)
-                }
-                return true
-            default:
-                return false
             }
+            if answeredCount > 0 { onComplete(answers) }
+            return true
+        case 48: // Tab - navigate accordion sections
+            if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
+                let nextIdx = modifiers.contains(.shift)
+                    ? (idx - 1 + questions.count) % questions.count
+                    : (idx + 1) % questions.count
+                toggleExpanded(questions[nextIdx].id)
+            }
+            return true
+        default:
+            return false
         }
     }
 
@@ -1397,7 +1433,6 @@ struct SwiftUIQuestionnaireDialog: View {
     @State private var answers: [String: Set<Int>] = [:]
     @State private var focusedQuestionIndex: Int = 0
     @State private var focusedOptionIndex: Int = 0
-    @State private var keyboardMonitor: KeyboardNavigationMonitor?
 
     private var answeredCount: Int {
         answers.values.filter { !$0.isEmpty }.count
@@ -1409,112 +1444,110 @@ struct SwiftUIQuestionnaireDialog: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with progress
-            HStack {
-                Text("Questions")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(Theme.Colors.textPrimary)
+        DialogContainer(keyHandler: handleKeyPress) {
+            VStack(spacing: 0) {
+                // Header with progress
+                HStack {
+                    Text("Questions")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(Theme.Colors.textPrimary)
 
-                Spacer()
+                    Spacer()
 
-                Text("\(answeredCount)/\(questions.count) answered")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Theme.Colors.textSecondary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
+                    Text("\(answeredCount)/\(questions.count) answered")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
 
-            // All questions visible
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 24) {
-                        ForEach(Array(questions.enumerated()), id: \.element.id) { qIndex, question in
-                            VStack(alignment: .leading, spacing: 0) {
-                                // Question number badge
-                                HStack(spacing: 8) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(!(answers[question.id] ?? []).isEmpty ? Theme.Colors.accentBlue : Theme.Colors.border)
-                                            .frame(width: 24, height: 24)
+                // All questions visible
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            ForEach(Array(questions.enumerated()), id: \.element.id) { qIndex, question in
+                                VStack(alignment: .leading, spacing: 0) {
+                                    // Question number badge
+                                    HStack(spacing: 8) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(!(answers[question.id] ?? []).isEmpty ? Theme.Colors.accentBlue : Theme.Colors.border)
+                                                .frame(width: 24, height: 24)
 
-                                        Text("\(qIndex + 1)")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundColor(.white)
+                                            Text("\(qIndex + 1)")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundColor(.white)
+                                        }
+
+                                        Text(question.question)
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundColor(Theme.Colors.textPrimary)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
+                                    .padding(.bottom, 12)
+                                    .id("q\(qIndex)")
 
-                                    Text(question.question)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(Theme.Colors.textPrimary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .padding(.bottom, 12)
-                                .id("q\(qIndex)")
-
-                                // Options
-                                VStack(spacing: 8) {
-                                    ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
-                                        SwiftUIChoiceCard(
-                                            title: option.label,
-                                            subtitle: option.description,
-                                            isSelected: (answers[question.id] ?? []).contains(optIndex),
-                                            isMultiSelect: question.multiSelect,
-                                            isFocused: focusedQuestionIndex == qIndex && focusedOptionIndex == optIndex,
-                                            onTap: { toggleSelection(questionId: question.id, optionIndex: optIndex, multiSelect: question.multiSelect) }
-                                        )
-                                        .id("q\(qIndex)o\(optIndex)")
+                                    // Options
+                                    VStack(spacing: 8) {
+                                        ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
+                                            SwiftUIChoiceCard(
+                                                title: option.label,
+                                                subtitle: option.description,
+                                                isSelected: (answers[question.id] ?? []).contains(optIndex),
+                                                isMultiSelect: question.multiSelect,
+                                                isFocused: focusedQuestionIndex == qIndex && focusedOptionIndex == optIndex,
+                                                onTap: { toggleSelection(questionId: question.id, optionIndex: optIndex, multiSelect: question.multiSelect) }
+                                            )
+                                            .id("q\(qIndex)o\(optIndex)")
+                                        }
                                     }
                                 }
-                            }
 
-                            if qIndex < questions.count - 1 {
-                                Rectangle()
-                                    .fill(Theme.Colors.border.opacity(0.8))
-                                    .frame(height: 1)
-                                    .padding(.vertical, 8)
+                                if qIndex < questions.count - 1 {
+                                    Rectangle()
+                                        .fill(Theme.Colors.border.opacity(0.8))
+                                        .frame(height: 1)
+                                        .padding(.vertical, 8)
+                                }
                             }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
-                }
-                .frame(maxHeight: 450)
-                .onChange(of: focusedQuestionIndex) { _ in
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo("q\(focusedQuestionIndex)", anchor: .top)
+                    .frame(maxHeight: 450)
+                    .onChange(of: focusedQuestionIndex) { _ in
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("q\(focusedQuestionIndex)", anchor: .top)
+                        }
+                    }
+                    .onChange(of: focusedOptionIndex) { _ in
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("q\(focusedQuestionIndex)o\(focusedOptionIndex)", anchor: .center)
+                        }
                     }
                 }
-                .onChange(of: focusedOptionIndex) { _ in
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo("q\(focusedQuestionIndex)o\(focusedOptionIndex)", anchor: .center)
-                    }
-                }
-            }
 
-            // Footer buttons
-            VStack(spacing: 8) {
-                KeyboardHintsView(hints: [
-                    KeyboardHint(key: "↑↓", label: "navigate"),
-                    KeyboardHint(key: "Space", label: "select"),
-                    KeyboardHint(key: "Tab", label: "next question"),
-                    KeyboardHint(key: "⏎", label: "done"),
-                    KeyboardHint(key: "Esc", label: "cancel")
-                ])
-                HStack(spacing: 10) {
-                    SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                    SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
-                        onComplete(answers)
-                    })
+                // Footer buttons
+                VStack(spacing: 8) {
+                    KeyboardHintsView(hints: [
+                        KeyboardHint(key: "↑↓", label: "navigate"),
+                        KeyboardHint(key: "Space", label: "select"),
+                        KeyboardHint(key: "Tab", label: "question"),
+                        KeyboardHint(key: "⏎", label: "done")
+                    ])
+                    HStack(spacing: 10) {
+                        SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                        SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                            onComplete(answers)
+                        })
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 20)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 20)
         }
-        .background(Color.clear)
-        .onAppear { setupKeyboardNavigation() }
-        .onDisappear { keyboardMonitor = nil }
     }
 
     private func toggleSelection(questionId: String, optionIndex: Int, multiSelect: Bool) {
@@ -1531,44 +1564,55 @@ struct SwiftUIQuestionnaireDialog: View {
         answers[questionId] = current
     }
 
-    private func setupKeyboardNavigation() {
-        keyboardMonitor = KeyboardNavigationMonitor { keyCode in
-            guard let question = focusedQuestion else { return false }
+    private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        // ESC to cancel
+        if keyCode == 53 {
+            onCancel()
+            return true
+        }
 
-            switch keyCode {
-            case 125: // Down arrow - next option or next question
-                if focusedOptionIndex < question.options.count - 1 {
-                    focusedOptionIndex += 1
-                } else if focusedQuestionIndex < questions.count - 1 {
-                    focusedQuestionIndex += 1
+        guard let question = focusedQuestion else { return false }
+
+        switch keyCode {
+        case 125: // Down arrow - next option or next question
+            if focusedOptionIndex < question.options.count - 1 {
+                focusedOptionIndex += 1
+            } else if focusedQuestionIndex < questions.count - 1 {
+                focusedQuestionIndex += 1
+                focusedOptionIndex = 0
+            }
+            return true
+        case 126: // Up arrow - previous option or previous question
+            if focusedOptionIndex > 0 {
+                focusedOptionIndex -= 1
+            } else if focusedQuestionIndex > 0 {
+                focusedQuestionIndex -= 1
+                focusedOptionIndex = questions[focusedQuestionIndex].options.count - 1
+            }
+            return true
+        case 49: // Space - toggle selection
+            toggleSelection(questionId: question.id, optionIndex: focusedOptionIndex, multiSelect: question.multiSelect)
+            return true
+        case 48: // Tab - next/previous question
+            if modifiers.contains(.shift) {
+                if focusedQuestionIndex > 0 {
+                    focusedQuestionIndex -= 1
                     focusedOptionIndex = 0
                 }
-                return true
-            case 126: // Up arrow - previous option or previous question
-                if focusedOptionIndex > 0 {
-                    focusedOptionIndex -= 1
-                } else if focusedQuestionIndex > 0 {
-                    focusedQuestionIndex -= 1
-                    focusedOptionIndex = questions[focusedQuestionIndex].options.count - 1
-                }
-                return true
-            case 49: // Space - toggle selection
-                toggleSelection(questionId: question.id, optionIndex: focusedOptionIndex, multiSelect: question.multiSelect)
-                return true
-            case 48: // Tab - next question
+            } else {
                 if focusedQuestionIndex < questions.count - 1 {
                     focusedQuestionIndex += 1
                     focusedOptionIndex = 0
                 }
-                return true
-            case 36: // Enter/Return - complete if any answers
-                if answeredCount > 0 {
-                    onComplete(answers)
-                }
-                return true
-            default:
-                return false
             }
+            return true
+        case 36: // Enter/Return - complete if any answers
+            if answeredCount > 0 {
+                onComplete(answers)
+            }
+            return true
+        default:
+            return false
         }
     }
 }
