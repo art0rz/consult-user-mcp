@@ -204,11 +204,9 @@ struct SwiftUIAccordionDialog: View {
                             }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.top, 4)  // Space for focus ring glow
+                        .padding(.top, 6)
                         .padding(.bottom, 8)
                     }
-                    .scrollClipDisabled()
-                    .frame(maxHeight: 450)
                     .onChange(of: focusedOptionIndex) { newIndex in
                         withAnimation(.easeOut(duration: 0.15)) {
                             proxy.scrollTo(newIndex, anchor: .center)
@@ -216,32 +214,35 @@ struct SwiftUIAccordionDialog: View {
                     }
                 }
 
-                DialogToolbar(
-                    expandedTool: $expandedTool,
-                    onSnooze: onSnooze,
-                    onFeedback: onFeedback
-                )
+                VStack(spacing: 0) {
+                    DialogToolbar(
+                        expandedTool: $expandedTool,
+                        onSnooze: onSnooze,
+                        onFeedback: onFeedback
+                    )
 
-                // Footer buttons
-                VStack(spacing: 8) {
-                    KeyboardHintsView(hints: [
-                        KeyboardHint(key: "↑↓", label: "navigate"),
-                        KeyboardHint(key: "Space", label: "select"),
-                        KeyboardHint(key: "⏎", label: "done"),
-                        KeyboardHint(key: "S", label: "snooze"),
-                        KeyboardHint(key: "F", label: "feedback")
-                    ])
-                    HStack(spacing: 10) {
-                        FocusableButton(title: "Cancel", isPrimary: false, action: onCancel)
+                    // Footer buttons
+                    VStack(spacing: 8) {
+                        KeyboardHintsView(hints: [
+                            KeyboardHint(key: "↑↓", label: "navigate"),
+                            KeyboardHint(key: "Space", label: "select"),
+                            KeyboardHint(key: "⏎", label: "done"),
+                            KeyboardHint(key: "S", label: "snooze"),
+                            KeyboardHint(key: "F", label: "feedback")
+                        ])
+                        HStack(spacing: 10) {
+                            FocusableButton(title: "Cancel", isPrimary: false, action: onCancel)
+                                .frame(height: 48)
+                            FocusableButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                                onComplete(answers)
+                            })
                             .frame(height: 48)
-                        FocusableButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
-                            onComplete(answers)
-                        })
-                        .frame(height: 48)
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .background(Theme.Colors.windowBackground)
             }
         }
         .onAppear {

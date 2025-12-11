@@ -2,6 +2,13 @@
 
 Native macOS dialog system for MCP (Model Context Protocol) servers.
 
+<p>
+  <img src="screenshots/confirm-dialog.png" width="200" alt="Confirmation dialog">
+  <img src="screenshots/confirm-snooze-panel.png" width="200" alt="Snooze panel">
+  <img src="screenshots/multiselect-features.png" width="200" alt="Multi-select">
+  <img src="screenshots/wizard-step1-framework.png" width="200" alt="Wizard dialog">
+</p>
+
 ## Install
 
 ### Option 1: MCP Server Only

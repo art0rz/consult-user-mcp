@@ -119,7 +119,11 @@ class DialogManager {
 
         var result: ChoiceResponse?
         let windowWidth: CGFloat = 420
-        let windowHeight: CGFloat = 560
+        // Dynamic height: base (header + toolbar + footer + padding) + per-choice height
+        let baseHeight: CGFloat = 240
+        let perChoiceHeight: CGFloat = 70
+        let calculatedHeight = baseHeight + CGFloat(request.choices.count) * perChoiceHeight
+        let windowHeight: CGFloat = min(max(calculatedHeight, 400), 700)
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
@@ -385,7 +389,14 @@ class DialogManager {
 
         var result: QuestionsResponse?
         let windowWidth: CGFloat = 460
-        let windowHeight: CGFloat = 560
+        // Dynamic height: all question headers + max options expanded + chrome
+        let questionCount = request.questions.count
+        let maxOptions = request.questions.map { $0.options.count }.max() ?? 3
+        let headerHeight: CGFloat = 56  // Each question header
+        let optionHeight: CGFloat = 60  // Each option when expanded
+        let chromeHeight: CGFloat = 260 // Title bar + toolbar + footer + padding
+        let calculatedHeight = chromeHeight + CGFloat(questionCount) * headerHeight + CGFloat(maxOptions) * optionHeight
+        let windowHeight: CGFloat = min(calculatedHeight, 800)
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
