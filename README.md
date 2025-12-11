@@ -20,6 +20,15 @@ Keep working while your AI agent runs autonomously. When it needs your input, a 
 </tr>
 </table>
 
+## Contents
+
+- [Install](#install)
+  - [MCP Server Only](#option-1-mcp-server-only)
+  - [With macOS App](#option-2-with-macos-app-optional)
+- [Build from Source](#build-from-source)
+- [Structure](#structure)
+- [MCP Tools](#mcp-tools)
+
 ## Install
 
 ### Option 1: MCP Server Only
@@ -45,13 +54,14 @@ Add to your MCP config:
 
 ### Option 2: With macOS App (Optional)
 
-The menu bar app provides a settings UI for dialog position, sounds, and speech rate. It's not required for the MCP server to work.
+The menu bar app provides a settings UI for dialog position, sounds, and speech rate. It also includes a built-in installer that can configure Claude Code for you automatically.
 
 1. Download **Consult User MCP.app.zip** from [Releases](../../releases)
 2. Unzip and drag to `/Applications`
-3. Launch it - a menu bar icon appears with settings access
+3. Launch it - a menu bar icon appears
+4. Click the menu bar icon and use **Install for Claude Code** to automatically configure the MCP server
 
-Use the bundled MCP server:
+Or configure manually:
 
 ```json
 {
@@ -88,5 +98,6 @@ consult-user-mcp/
 - `ask_confirmation` - Yes/No dialog
 - `ask_multiple_choice` - List picker
 - `ask_text_input` - Text input
+- `ask_questions` - Multi-question dialog (wizard, accordion, or questionnaire mode)
 - `notify_user` - System notification
 - `tts` - Text-to-speech

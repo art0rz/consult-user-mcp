@@ -407,7 +407,7 @@ struct SettingsView: View {
     }
 
     private func openGitHub() {
-        if let url = URL(string: "https://github.com") {
+        if let url = URL(string: "https://github.com/doublej/consult-user-mcp") {
             NSWorkspace.shared.open(url)
         }
     }
