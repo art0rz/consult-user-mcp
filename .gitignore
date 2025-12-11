@@ -30,3 +30,10 @@ icon-v*.svg
 
 # App bundle (distributed via GitHub Releases)
 Speak MCP.app/
+
+# Local dev files
+.history-analysis/
+.claude-plugin/
+.mcp.json
+.plan.md
+screenshots/
