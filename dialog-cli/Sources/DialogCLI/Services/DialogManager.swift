@@ -373,19 +373,24 @@ class DialogManager {
 
         let (window, contentView) = createWindow(width: windowWidth, height: windowHeight)
 
-        // Convert answers from Set<Int> to response format
-        func buildResponse(answers: [String: Set<Int>], cancelled: Bool, dismissed: Bool) -> QuestionsResponse {
+        // Convert answers from QuestionAnswer to response format
+        func buildResponse(answers: [String: QuestionAnswer], cancelled: Bool, dismissed: Bool) -> QuestionsResponse {
             var responseAnswers: [String: StringOrStrings] = [:]
             var completedCount = 0
 
             for question in request.questions {
-                if let indices = answers[question.id], !indices.isEmpty {
+                if let answer = answers[question.id], !answer.isEmpty {
                     completedCount += 1
-                    let labels = indices.sorted().map { question.options[$0].label }
-                    if question.multiSelect {
-                        responseAnswers[question.id] = .multiple(labels)
-                    } else if let first = labels.first {
-                        responseAnswers[question.id] = .single(first)
+                    switch answer {
+                    case .choices(let indices):
+                        let labels = indices.sorted().map { question.options[$0].label }
+                        if question.multiSelect {
+                            responseAnswers[question.id] = .multiple(labels)
+                        } else if let first = labels.first {
+                            responseAnswers[question.id] = .single(first)
+                        }
+                    case .text(let str):
+                        responseAnswers[question.id] = .single(str)
                     }
                 }
             }
@@ -393,7 +398,7 @@ class DialogManager {
             return QuestionsResponse(dialogType: "questions", answers: responseAnswers, cancelled: cancelled, dismissed: dismissed, completedCount: completedCount)
         }
 
-        let onComplete: ([String: Set<Int>]) -> Void = { answers in
+        let onComplete: ([String: QuestionAnswer]) -> Void = { answers in
             result = buildResponse(answers: answers, cancelled: false, dismissed: false)
             NSApp.stopModal()
         }

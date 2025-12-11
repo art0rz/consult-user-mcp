@@ -42,6 +42,7 @@ struct DialogHeader: View {
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(Theme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 24)
                     .padding(.top, 4)
             }
@@ -79,7 +80,7 @@ struct DialogFooter: View {
             KeyboardHintsView(hints: hints)
             HStack(spacing: 10) {
                 ForEach(buttons) { button in
-                    SwiftUIModernButton(
+                    FocusableButton(
                         title: button.title,
                         isPrimary: button.isPrimary,
                         isDestructive: button.isDestructive,
@@ -87,6 +88,7 @@ struct DialogFooter: View {
                         showReturnHint: button.showReturnHint,
                         action: button.action
                     )
+                    .frame(height: 48)
                 }
             }
         }
@@ -117,13 +119,42 @@ struct DialogContainer<Content: View>: View {
     var body: some View {
         content
             .background(Color.clear)
-            .onAppear { setupKeyboardNavigation() }
-            .onDisappear { keyboardMonitor = nil }
+            .onAppear {
+                FocusManager.shared.reset()
+                setupKeyboardNavigation()
+                // Focus first element after a brief delay to let views register
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    FocusManager.shared.focusFirst()
+                }
+            }
+            .onDisappear {
+                keyboardMonitor = nil
+                FocusManager.shared.reset()
+            }
     }
 
     private func setupKeyboardNavigation() {
         keyboardMonitor = KeyboardNavigationMonitor { keyCode, modifiers in
-            // Let custom handler try first
+            // Handle navigation keys globally via FocusManager
+            switch keyCode {
+            case 48: // Tab
+                if modifiers.contains(.shift) {
+                    FocusManager.shared.focusPrevious()
+                } else {
+                    FocusManager.shared.focusNext()
+                }
+                return true
+            case 125: // Down arrow
+                FocusManager.shared.focusNext()
+                return true
+            case 126: // Up arrow
+                FocusManager.shared.focusPrevious()
+                return true
+            default:
+                break
+            }
+
+            // Let custom handler try (for Enter/Escape/etc)
             if let handler = keyHandler, handler(keyCode, modifiers) {
                 return true
             }

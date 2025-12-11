@@ -1,19 +1,15 @@
 import SwiftUI
 import AppKit
 
-// MARK: - SwiftUI Modern Button
+// MARK: - Focusable Button (NSViewRepresentable)
 
-struct SwiftUIModernButton: View {
+struct FocusableButton: NSViewRepresentable {
     let title: String
     let isPrimary: Bool
     let isDestructive: Bool
     let isDisabled: Bool
     let showReturnHint: Bool
     let action: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) var reduceMotion
-    @State private var isHovered = false
-    @State private var isPressed = false
 
     init(title: String, isPrimary: Bool = false, isDestructive: Bool = false, isDisabled: Bool = false, showReturnHint: Bool = false, action: @escaping () -> Void) {
         self.title = title
@@ -24,86 +20,383 @@ struct SwiftUIModernButton: View {
         self.action = action
     }
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(.system(size: 15, weight: isPrimary ? .semibold : .medium))
-                    .foregroundColor(buttonTextColor)
-                if showReturnHint && isPrimary && !isDisabled {
-                    Image(systemName: "return")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(buttonTextColor.opacity(0.7))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(buttonFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isPrimary ? Color.clear : Theme.Colors.border, lineWidth: 1)
-            )
-        }
-        .buttonStyle(PressableButtonStyle())
-        .disabled(isDisabled)
-        .onHover { hovering in
-            guard !isDisabled else { return }
-            if reduceMotion {
-                isHovered = hovering
-            } else {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    isHovered = hovering
-                }
-            }
-        }
-        .accessibilityLabel(Text(title))
-        .accessibilityAddTraits(isPrimary ? .isButton : [.isButton])
+    func makeNSView(context: Context) -> FocusableButtonView {
+        let view = FocusableButtonView()
+        view.title = title
+        view.isPrimary = isPrimary
+        view.isDestructive = isDestructive
+        view.isDisabled = isDisabled
+        view.showReturnHint = showReturnHint
+        view.onClick = action
+        return view
     }
 
-    private var buttonFill: AnyShapeStyle {
-        if isDisabled {
-            return AnyShapeStyle(Theme.Colors.cardBackground.opacity(0.5))
-        } else if isPrimary {
-            return AnyShapeStyle(LinearGradient(
-                colors: isHovered
-                    ? [Theme.Colors.accentBlue, Theme.Colors.accentBlueDark]
-                    : [Theme.Colors.accentBlueLight, Theme.Colors.accentBlue],
-                startPoint: .top,
-                endPoint: .bottom
-            ))
-        } else if isDestructive {
-            return AnyShapeStyle(isHovered ? Theme.Colors.accentRed.opacity(0.3) : Theme.Colors.accentRed.opacity(0.2))
-        } else {
-            return AnyShapeStyle(isHovered ? Theme.Colors.cardHover : Theme.Colors.cardBackground)
-        }
-    }
-
-    private var buttonTextColor: Color {
-        if isDisabled {
-            return Theme.Colors.textMuted
-        } else if isPrimary {
-            return .white
-        } else if isDestructive {
-            return Theme.Colors.accentRed
-        } else {
-            return Theme.Colors.textPrimary
-        }
+    func updateNSView(_ nsView: FocusableButtonView, context: Context) {
+        nsView.title = title
+        nsView.isPrimary = isPrimary
+        nsView.isDestructive = isDestructive
+        nsView.isDisabled = isDisabled
+        nsView.showReturnHint = showReturnHint
+        nsView.onClick = action
+        nsView.needsDisplay = true
     }
 }
 
-// MARK: - Button Press Style
+// MARK: - Focusable Button View (AppKit)
 
-struct PressableButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) var reduceMotion
+class FocusableButtonView: NSView {
+    var title: String = ""
+    var isPrimary: Bool = false
+    var isDestructive: Bool = false
+    var isDisabled: Bool = false
+    var showReturnHint: Bool = false
+    var onClick: (() -> Void)?
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: configuration.isPressed)
+    private var isHovered = false
+    private var isPressed = false
+    private var trackingArea: NSTrackingArea?
+
+    override var acceptsFirstResponder: Bool { !isDisabled }
+    override var canBecomeKeyView: Bool { !isDisabled }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    // System focus ring support
+    override var focusRingType: NSFocusRingType {
+        get { .exterior }
+        set { /* ignore - always use exterior */ }
+    }
+
+    override func drawFocusRingMask() {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 12, yRadius: 12)
+        path.fill()
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupTracking()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            FocusManager.shared.register(self)
+        } else {
+            FocusManager.shared.unregister(self)
+        }
+    }
+
+    deinit {
+        FocusManager.shared.unregister(self)
+    }
+
+    private func setupTracking() {
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea!)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        setupTracking()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        guard !isDisabled else { return }
+        isHovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        isPressed = false
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard !isDisabled else { return }
+        isPressed = true
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard !isDisabled else { return }
+        if isPressed && isHovered {
+            onClick?()
+        }
+        isPressed = false
+        needsDisplay = true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard !isDisabled else {
+            super.keyDown(with: event)
+            return
+        }
+        // Space (49) or Enter (36) activates button
+        if event.keyCode == 49 || event.keyCode == 36 {
+            onClick?()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: 48)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12)
+
+        // Background
+        let bgColor: NSColor
+        if isDisabled {
+            bgColor = Theme.cardBackground.withAlphaComponent(0.5)
+        } else if isPrimary {
+            if isPressed {
+                bgColor = Theme.accentBlueDark
+            } else if isHovered {
+                bgColor = Theme.accentBlue.blended(withFraction: 0.1, of: .white) ?? Theme.accentBlue
+            } else {
+                bgColor = Theme.accentBlue
+            }
+        } else if isDestructive {
+            if isPressed {
+                bgColor = Theme.accentRed.withAlphaComponent(0.4)
+            } else if isHovered {
+                bgColor = Theme.accentRed.withAlphaComponent(0.3)
+            } else {
+                bgColor = Theme.accentRed.withAlphaComponent(0.2)
+            }
+        } else {
+            if isPressed {
+                bgColor = Theme.cardSelected
+            } else if isHovered {
+                bgColor = Theme.cardHover
+            } else {
+                bgColor = Theme.cardBackground
+            }
+        }
+
+        bgColor.setFill()
+        path.fill()
+
+        // Border for non-primary buttons
+        if !isPrimary {
+            Theme.border.setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        }
+
+        // Text
+        let textColor: NSColor
+        if isDisabled {
+            textColor = Theme.textMuted
+        } else if isPrimary {
+            textColor = .white
+        } else if isDestructive {
+            textColor = Theme.accentRed
+        } else {
+            textColor = Theme.textPrimary
+        }
+
+        let font = NSFont.systemFont(ofSize: 15, weight: isPrimary ? .semibold : .medium)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: textColor
+        ]
+
+        var displayText = title
+        if showReturnHint && isPrimary && !isDisabled {
+            displayText += " ⏎"
+        }
+
+        let size = (displayText as NSString).size(withAttributes: attrs)
+        let textRect = NSRect(
+            x: (bounds.width - size.width) / 2,
+            y: (bounds.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+
+        (displayText as NSString).draw(in: textRect, withAttributes: attrs)
+    }
+}
+
+// MARK: - Focusable Text Field (NSViewRepresentable)
+
+struct FocusableTextField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    let onSubmit: (() -> Void)?
+
+    init(placeholder: String = "", text: Binding<String>, onSubmit: (() -> Void)? = nil) {
+        self.placeholder = placeholder
+        self._text = text
+        self.onSubmit = onSubmit
+    }
+
+    func makeNSView(context: Context) -> FocusableTextFieldView {
+        let view = FocusableTextFieldView()
+        view.placeholder = placeholder
+        view.text = text
+        view.onTextChange = { newText in
+            DispatchQueue.main.async {
+                self.text = newText
+            }
+        }
+        view.onSubmit = onSubmit
+        return view
+    }
+
+    func updateNSView(_ nsView: FocusableTextFieldView, context: Context) {
+        nsView.placeholder = placeholder
+        if nsView.text != text {
+            nsView.text = text
+        }
+        nsView.onTextChange = { newText in
+            DispatchQueue.main.async {
+                self.text = newText
+            }
+        }
+        nsView.onSubmit = onSubmit
+    }
+}
+
+// MARK: - Focusable Text Field View (AppKit)
+
+class FocusableTextFieldView: NSView, NSTextFieldDelegate {
+    var placeholder: String = "" {
+        didSet { textField.placeholderString = placeholder }
+    }
+    var text: String {
+        get { textField.stringValue }
+        set { textField.stringValue = newValue }
+    }
+    var onTextChange: ((String) -> Void)?
+    var onSubmit: (() -> Void)?
+
+    private let textField = NSTextField()
+    private var trackingArea: NSTrackingArea?
+
+    override var acceptsFirstResponder: Bool { true }
+    override var canBecomeKeyView: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    // System focus ring support
+    override var focusRingType: NSFocusRingType {
+        get { .exterior }
+        set { /* ignore */ }
+    }
+
+    override func drawFocusRingMask() {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 10, yRadius: 10)
+        path.fill()
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupTextField()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func setupTextField() {
+        textField.isEditable = true
+        textField.isSelectable = true
+        textField.isBordered = false
+        textField.backgroundColor = .clear
+        textField.focusRingType = .none
+        textField.font = NSFont.systemFont(ofSize: 15)
+        textField.textColor = Theme.textPrimary
+        textField.delegate = self
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(textField)
+
+        NSLayoutConstraint.activate([
+            textField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            textField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            textField.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            FocusManager.shared.register(self)
+        } else {
+            FocusManager.shared.unregister(self)
+        }
+    }
+
+    deinit {
+        FocusManager.shared.unregister(self)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        window?.makeFirstResponder(textField)
+        needsDisplay = true
+        return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(textField)
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: 48)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
+
+        // Background
+        Theme.inputBackground.setFill()
+        path.fill()
+
+        // Border
+        let isFocused = window?.firstResponder == textField || window?.firstResponder == textField.currentEditor()
+        let borderColor = isFocused ? Theme.accentBlue : Theme.border
+        borderColor.setStroke()
+        path.lineWidth = isFocused ? 2 : 1
+        path.stroke()
+    }
+
+    // MARK: - NSTextFieldDelegate
+
+    func controlTextDidChange(_ obj: Notification) {
+        onTextChange?(textField.stringValue)
+        needsDisplay = true
+    }
+
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        needsDisplay = true
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        needsDisplay = true
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            onSubmit?()
+            return true
+        }
+        return false
     }
 }
 

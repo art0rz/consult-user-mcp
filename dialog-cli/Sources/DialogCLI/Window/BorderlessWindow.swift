@@ -7,6 +7,12 @@ class BorderlessWindow: NSWindow {
     override var canBecomeMain: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+        // Enable automatic Tab navigation through focusable views
+        self.autorecalculatesKeyViewLoop = true
+    }
+
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { // ESC key
             NSApp.stopModal(withCode: .cancel)

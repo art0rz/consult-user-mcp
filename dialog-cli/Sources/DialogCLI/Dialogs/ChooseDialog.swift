@@ -60,14 +60,14 @@ struct SwiftUIChooseDialog: View {
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(Array(choices.enumerated()), id: \.offset) { index, choice in
-                        SwiftUIChoiceCard(
+                        FocusableChoiceCard(
                             title: choice,
                             subtitle: descriptions?[safe: index],
                             isSelected: selectedIndices.contains(index),
                             isMultiSelect: allowMultiple,
-                            isFocused: focusedIndex == index,
                             onTap: { toggleSelection(at: index) }
                         )
+                        .frame(minHeight: 48)
                         .id(index)
                     }
                 }
@@ -99,23 +99,8 @@ struct SwiftUIChooseDialog: View {
     }
 
     private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        // Navigation (Tab, arrows) and Space handled by FocusManager + focused views
         switch keyCode {
-        case 48: // Tab
-            if modifiers.contains(.shift) {
-                if focusedIndex > 0 { focusedIndex -= 1 }
-            } else {
-                if focusedIndex < choices.count - 1 { focusedIndex += 1 }
-            }
-            return true
-        case 125: // Down arrow
-            if focusedIndex < choices.count - 1 { focusedIndex += 1 }
-            return true
-        case 126: // Up arrow
-            if focusedIndex > 0 { focusedIndex -= 1 }
-            return true
-        case 49: // Space - toggle selection
-            toggleSelection(at: focusedIndex)
-            return true
         case 36: // Enter/Return - confirm if selection made
             if !selectedIndices.isEmpty { onComplete(selectedIndices) }
             return true

@@ -14,6 +14,7 @@ struct Theme {
     static let textMuted = NSColor(white: 0.4, alpha: 1.0)
 
     static let accentBlue = NSColor(red: 0.35, green: 0.55, blue: 1.0, alpha: 1.0)
+    static let accentBlueDark = NSColor(red: 0.25, green: 0.45, blue: 0.90, alpha: 1.0)
     static let accentGreen = NSColor(red: 0.30, green: 0.85, blue: 0.55, alpha: 1.0)
     static let accentRed = NSColor(red: 0.95, green: 0.35, blue: 0.40, alpha: 1.0)
 

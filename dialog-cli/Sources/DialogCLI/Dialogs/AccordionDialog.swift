@@ -7,13 +7,19 @@ struct AccordionSection: View {
     let question: QuestionItem
     let isExpanded: Bool
     let isAnswered: Bool
-    @Binding var selectedIndices: Set<Int>
+    @Binding var answer: QuestionAnswer
+    @Binding var textValue: String
     @Binding var focusedIndex: Int
     let onToggle: () -> Void
     let onAutoAdvance: () -> Void
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isHovered = false
+
+    private var selectedIndices: Set<Int> {
+        if case .choices(let set) = answer { return set }
+        return []
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -73,16 +79,27 @@ struct AccordionSection: View {
             // Expanded content
             if isExpanded {
                 VStack(spacing: 8) {
-                    ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
-                        SwiftUIChoiceCard(
-                            title: option.label,
-                            subtitle: option.description,
-                            isSelected: selectedIndices.contains(index),
-                            isMultiSelect: question.multiSelect,
-                            isFocused: focusedIndex == index,
-                            onTap: { toggleSelection(at: index) }
+                    if question.type == .text {
+                        FocusableTextField(
+                            placeholder: question.placeholder ?? "Enter your answer...",
+                            text: $textValue
                         )
-                        .id(index)
+                        .frame(height: 48)
+                        .onChange(of: textValue) { newValue in
+                            answer = .text(newValue)
+                        }
+                    } else {
+                        ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
+                            FocusableChoiceCard(
+                                title: option.label,
+                                subtitle: option.description,
+                                isSelected: selectedIndices.contains(index),
+                                isMultiSelect: question.multiSelect,
+                                onTap: { toggleSelection(at: index) }
+                            )
+                            .frame(minHeight: 48)
+                            .id(index)
+                        }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -93,34 +110,44 @@ struct AccordionSection: View {
     }
 
     private func toggleSelection(at index: Int) {
+        var current = selectedIndices
         if question.multiSelect {
-            if selectedIndices.contains(index) {
-                selectedIndices.remove(index)
+            if current.contains(index) {
+                current.remove(index)
             } else {
-                selectedIndices.insert(index)
+                current.insert(index)
             }
         } else {
-            selectedIndices = [index]
+            current = [index]
             // Auto-advance to next section after single-select
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 onAutoAdvance()
             }
         }
+        answer = .choices(current)
     }
 }
 
 struct SwiftUIAccordionDialog: View {
     let questions: [QuestionItem]
-    let onComplete: ([String: Set<Int>]) -> Void
+    let onComplete: ([String: QuestionAnswer]) -> Void
     let onCancel: () -> Void
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var expandedId: String?
-    @State private var answers: [String: Set<Int>] = [:]
+    @State private var answers: [String: QuestionAnswer] = [:]
+    @State private var textInputs: [String: String] = [:]
     @State private var focusedOptionIndex: Int = 0
 
     private var answeredCount: Int {
         answers.values.filter { !$0.isEmpty }.count
+    }
+
+    private func isAnswered(_ questionId: String) -> Bool {
+        if let answer = answers[questionId] {
+            return !answer.isEmpty
+        }
+        return false
     }
 
     private var expandedQuestion: QuestionItem? {
@@ -154,10 +181,14 @@ struct SwiftUIAccordionDialog: View {
                                 AccordionSection(
                                     question: question,
                                     isExpanded: expandedId == question.id,
-                                    isAnswered: !(answers[question.id] ?? []).isEmpty,
-                                    selectedIndices: Binding(
-                                        get: { answers[question.id] ?? [] },
+                                    isAnswered: isAnswered(question.id),
+                                    answer: Binding(
+                                        get: { answers[question.id] ?? (question.type == .text ? .text("") : .choices([])) },
                                         set: { answers[question.id] = $0 }
+                                    ),
+                                    textValue: Binding(
+                                        get: { textInputs[question.id] ?? "" },
+                                        set: { textInputs[question.id] = $0 }
                                     ),
                                     focusedIndex: Binding(
                                         get: { expandedId == question.id ? focusedOptionIndex : -1 },
@@ -170,8 +201,10 @@ struct SwiftUIAccordionDialog: View {
                             }
                         }
                         .padding(.horizontal, 20)
+                        .padding(.top, 4)  // Space for focus ring glow
                         .padding(.bottom, 8)
                     }
+                    .scrollClipDisabled()
                     .frame(maxHeight: 450)
                     .onChange(of: focusedOptionIndex) { newIndex in
                         withAnimation(.easeOut(duration: 0.15)) {
@@ -189,10 +222,12 @@ struct SwiftUIAccordionDialog: View {
                         KeyboardHint(key: "⏎", label: "done")
                     ])
                     HStack(spacing: 10) {
-                        SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                        SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                        FocusableButton(title: "Cancel", isPrimary: false, action: onCancel)
+                            .frame(height: 48)
+                        FocusableButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
                             onComplete(answers)
                         })
+                        .frame(height: 48)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -233,57 +268,14 @@ struct SwiftUIAccordionDialog: View {
     }
 
     private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
-        // ESC to cancel
-        if keyCode == 53 {
+        // Navigation (Tab, arrows) and Space handled by FocusManager + focused views
+        switch keyCode {
+        case 53: // ESC
             onCancel()
             return true
-        }
-
-        guard let question = expandedQuestion else {
-            // No section expanded - Tab opens first/last, Enter completes if any answers
-            if keyCode == 48 {
-                if modifiers.contains(.shift) {
-                    if let last = questions.last { toggleExpanded(last.id) }
-                } else {
-                    if let first = questions.first { toggleExpanded(first.id) }
-                }
-                return true
-            }
-            if keyCode == 36 && answeredCount > 0 {
+        case 36: // Enter/Return - complete if any answers
+            if answeredCount > 0 {
                 onComplete(answers)
-                return true
-            }
-            return false
-        }
-
-        switch keyCode {
-        case 125: // Down arrow
-            if focusedOptionIndex < question.options.count - 1 { focusedOptionIndex += 1 }
-            return true
-        case 126: // Up arrow
-            if focusedOptionIndex > 0 { focusedOptionIndex -= 1 }
-            return true
-        case 49: // Space - toggle selection
-            toggleSelection(for: question, at: focusedOptionIndex)
-            return true
-        case 36: // Enter/Return - advance or complete
-            let currentAnswered = !(answers[question.id] ?? []).isEmpty
-            if currentAnswered {
-                if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
-                    if idx + 1 < questions.count {
-                        advanceToNextSection(from: question.id)
-                        return true
-                    }
-                }
-            }
-            if answeredCount > 0 { onComplete(answers) }
-            return true
-        case 48: // Tab - navigate accordion sections
-            if let idx = questions.firstIndex(where: { $0.id == expandedId }) {
-                let nextIdx = modifiers.contains(.shift)
-                    ? (idx - 1 + questions.count) % questions.count
-                    : (idx + 1) % questions.count
-                toggleExpanded(questions[nextIdx].id)
             }
             return true
         default:
@@ -291,17 +283,4 @@ struct SwiftUIAccordionDialog: View {
         }
     }
 
-    private func toggleSelection(for question: QuestionItem, at index: Int) {
-        var current = answers[question.id] ?? []
-        if question.multiSelect {
-            if current.contains(index) {
-                current.remove(index)
-            } else {
-                current.insert(index)
-            }
-        } else {
-            current = [index]
-        }
-        answers[question.id] = current
-    }
 }

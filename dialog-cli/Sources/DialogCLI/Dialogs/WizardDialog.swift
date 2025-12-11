@@ -29,8 +29,14 @@ struct ProgressBar: View {
 
 struct QuestionSection: View {
     let question: QuestionItem
-    @Binding var selectedIndices: Set<Int>
+    @Binding var answer: QuestionAnswer
+    @Binding var textValue: String
     @Binding var focusedIndex: Int
+
+    private var selectedIndices: Set<Int> {
+        if case .choices(let set) = answer { return set }
+        return []
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -39,32 +45,45 @@ struct QuestionSection: View {
                 .foregroundColor(Theme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 8) {
-                ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
-                    SwiftUIChoiceCard(
-                        title: option.label,
-                        subtitle: option.description,
-                        isSelected: selectedIndices.contains(index),
-                        isMultiSelect: question.multiSelect,
-                        isFocused: focusedIndex == index,
-                        onTap: { toggleSelection(at: index) }
-                    )
-                    .id(index)
+            if question.type == .text {
+                FocusableTextField(
+                    placeholder: question.placeholder ?? "Enter your answer...",
+                    text: $textValue
+                )
+                .frame(height: 48)
+                .onChange(of: textValue) { newValue in
+                    answer = .text(newValue)
+                }
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
+                        FocusableChoiceCard(
+                            title: option.label,
+                            subtitle: option.description,
+                            isSelected: selectedIndices.contains(index),
+                            isMultiSelect: question.multiSelect,
+                            onTap: { toggleSelection(at: index) }
+                        )
+                        .frame(minHeight: 48)
+                        .id(index)
+                    }
                 }
             }
         }
     }
 
     private func toggleSelection(at index: Int) {
+        var current = selectedIndices
         if question.multiSelect {
-            if selectedIndices.contains(index) {
-                selectedIndices.remove(index)
+            if current.contains(index) {
+                current.remove(index)
             } else {
-                selectedIndices.insert(index)
+                current.insert(index)
             }
         } else {
-            selectedIndices = [index]
+            current = [index]
         }
+        answer = .choices(current)
     }
 }
 
@@ -72,15 +91,16 @@ struct QuestionSection: View {
 
 struct SwiftUIWizardDialog: View {
     let questions: [QuestionItem]
-    let onComplete: ([String: Set<Int>]) -> Void
+    let onComplete: ([String: QuestionAnswer]) -> Void
     let onCancel: () -> Void
 
     @State private var currentIndex = 0
-    @State private var answers: [String: Set<Int>] = [:]
+    @State private var answers: [String: QuestionAnswer] = [:]
     @State private var focusedOptionIndex: Int = 0
+    @State private var textInputs: [String: String] = [:]
 
     private var currentQuestion: QuestionItem { questions[currentIndex] }
-    private var currentAnswer: Set<Int> { answers[currentQuestion.id] ?? [] }
+    private var currentAnswer: QuestionAnswer { answers[currentQuestion.id] ?? (currentQuestion.type == .text ? .text("") : .choices([])) }
     private var isFirst: Bool { currentIndex == 0 }
     private var isLast: Bool { currentIndex == questions.count - 1 }
 
@@ -104,15 +124,21 @@ struct SwiftUIWizardDialog: View {
                     ScrollView {
                         QuestionSection(
                             question: currentQuestion,
-                            selectedIndices: Binding(
+                            answer: Binding(
                                 get: { currentAnswer },
                                 set: { answers[currentQuestion.id] = $0 }
+                            ),
+                            textValue: Binding(
+                                get: { textInputs[currentQuestion.id] ?? "" },
+                                set: { textInputs[currentQuestion.id] = $0 }
                             ),
                             focusedIndex: $focusedOptionIndex
                         )
                         .padding(.horizontal, 20)
+                        .padding(.top, 4)  // Space for focus ring glow
                         .padding(.bottom, 8)
                     }
+                    .scrollClipDisabled()
                     .frame(maxHeight: 420)
                     .onChange(of: focusedOptionIndex) { newIndex in
                         withAnimation(.easeOut(duration: 0.15)) {
@@ -131,17 +157,21 @@ struct SwiftUIWizardDialog: View {
                     ])
                     HStack(spacing: 10) {
                         if isFirst {
-                            SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
+                            FocusableButton(title: "Cancel", isPrimary: false, action: onCancel)
+                                .frame(height: 48)
                         } else {
-                            SwiftUIModernButton(title: "Back", isPrimary: false, action: goBack)
+                            FocusableButton(title: "Back", isPrimary: false, action: goBack)
+                                .frame(height: 48)
                         }
 
                         if isLast {
-                            SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
+                            FocusableButton(title: "Done", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: {
                                 onComplete(answers)
                             })
+                            .frame(height: 48)
                         } else {
-                            SwiftUIModernButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
+                            FocusableButton(title: "Next", isPrimary: true, isDisabled: currentAnswer.isEmpty, showReturnHint: true, action: goNext)
+                                .frame(height: 48)
                         }
                     }
                 }
@@ -149,29 +179,20 @@ struct SwiftUIWizardDialog: View {
                 .padding(.vertical, 16)
             }
         }
-        .onChange(of: currentIndex) { _ in focusedOptionIndex = 0 }
+        .onChange(of: currentIndex) { _ in
+            focusedOptionIndex = 0
+            // Focus first element (sorted by position - top of screen first)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                FocusManager.shared.focusFirst()
+            }
+        }
     }
 
     private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        // Navigation (Tab, up/down arrows) and Space handled by FocusManager + focused views
         switch keyCode {
         case 53: // ESC
             onCancel()
-            return true
-        case 48: // Tab
-            if modifiers.contains(.shift) {
-                if focusedOptionIndex > 0 { focusedOptionIndex -= 1 }
-            } else {
-                if focusedOptionIndex < currentQuestion.options.count - 1 { focusedOptionIndex += 1 }
-            }
-            return true
-        case 125: // Down arrow
-            if focusedOptionIndex < currentQuestion.options.count - 1 { focusedOptionIndex += 1 }
-            return true
-        case 126: // Up arrow
-            if focusedOptionIndex > 0 { focusedOptionIndex -= 1 }
-            return true
-        case 49: // Space - toggle selection
-            toggleSelection(at: focusedOptionIndex)
             return true
         case 36: // Enter/Return - next or complete
             if !currentAnswer.isEmpty {
@@ -187,20 +208,6 @@ struct SwiftUIWizardDialog: View {
         default:
             return false
         }
-    }
-
-    private func toggleSelection(at index: Int) {
-        var current = answers[currentQuestion.id] ?? []
-        if currentQuestion.multiSelect {
-            if current.contains(index) {
-                current.remove(index)
-            } else {
-                current.insert(index)
-            }
-        } else {
-            current = [index]
-        }
-        answers[currentQuestion.id] = current
     }
 
     private func goNext() {

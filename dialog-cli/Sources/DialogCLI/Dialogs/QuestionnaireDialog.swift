@@ -5,10 +5,11 @@ import SwiftUI
 
 struct SwiftUIQuestionnaireDialog: View {
     let questions: [QuestionItem]
-    let onComplete: ([String: Set<Int>]) -> Void
+    let onComplete: ([String: QuestionAnswer]) -> Void
     let onCancel: () -> Void
 
-    @State private var answers: [String: Set<Int>] = [:]
+    @State private var answers: [String: QuestionAnswer] = [:]
+    @State private var textInputs: [String: String] = [:]
     @State private var focusedQuestionIndex: Int = 0
     @State private var focusedOptionIndex: Int = 0
 
@@ -19,6 +20,18 @@ struct SwiftUIQuestionnaireDialog: View {
     private var focusedQuestion: QuestionItem? {
         guard focusedQuestionIndex < questions.count else { return nil }
         return questions[focusedQuestionIndex]
+    }
+
+    private func isAnswered(_ questionId: String) -> Bool {
+        if let answer = answers[questionId] {
+            return !answer.isEmpty
+        }
+        return false
+    }
+
+    private func selectedIndices(for questionId: String) -> Set<Int> {
+        if case .choices(let set) = answers[questionId] { return set }
+        return []
     }
 
     var body: some View {
@@ -50,7 +63,7 @@ struct SwiftUIQuestionnaireDialog: View {
                                     HStack(spacing: 8) {
                                         ZStack {
                                             Circle()
-                                                .fill(!(answers[question.id] ?? []).isEmpty ? Theme.Colors.accentBlue : Theme.Colors.border)
+                                                .fill(isAnswered(question.id) ? Theme.Colors.accentBlue : Theme.Colors.border)
                                                 .frame(width: 24, height: 24)
 
                                             Text("\(qIndex + 1)")
@@ -66,18 +79,33 @@ struct SwiftUIQuestionnaireDialog: View {
                                     .padding(.bottom, 12)
                                     .id("q\(qIndex)")
 
-                                    // Options
+                                    // Options or text input
                                     VStack(spacing: 8) {
-                                        ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
-                                            SwiftUIChoiceCard(
-                                                title: option.label,
-                                                subtitle: option.description,
-                                                isSelected: (answers[question.id] ?? []).contains(optIndex),
-                                                isMultiSelect: question.multiSelect,
-                                                isFocused: focusedQuestionIndex == qIndex && focusedOptionIndex == optIndex,
-                                                onTap: { toggleSelection(questionId: question.id, optionIndex: optIndex, multiSelect: question.multiSelect) }
+                                        if question.type == .text {
+                                            FocusableTextField(
+                                                placeholder: question.placeholder ?? "Enter your answer...",
+                                                text: Binding(
+                                                    get: { textInputs[question.id] ?? "" },
+                                                    set: { newValue in
+                                                        textInputs[question.id] = newValue
+                                                        answers[question.id] = .text(newValue)
+                                                    }
+                                                )
                                             )
-                                            .id("q\(qIndex)o\(optIndex)")
+                                            .frame(height: 48)
+                                            .id("q\(qIndex)o0")
+                                        } else {
+                                            ForEach(Array(question.options.enumerated()), id: \.offset) { optIndex, option in
+                                                FocusableChoiceCard(
+                                                    title: option.label,
+                                                    subtitle: option.description,
+                                                    isSelected: selectedIndices(for: question.id).contains(optIndex),
+                                                    isMultiSelect: question.multiSelect,
+                                                    onTap: { toggleSelection(questionId: question.id, optionIndex: optIndex, multiSelect: question.multiSelect) }
+                                                )
+                                                .frame(minHeight: 48)
+                                                .id("q\(qIndex)o\(optIndex)")
+                                            }
                                         }
                                     }
                                 }
@@ -91,8 +119,10 @@ struct SwiftUIQuestionnaireDialog: View {
                             }
                         }
                         .padding(.horizontal, 20)
+                        .padding(.top, 4)  // Space for focus ring glow
                         .padding(.bottom, 16)
                     }
+                    .scrollClipDisabled()
                     .frame(maxHeight: 450)
                     .onChange(of: focusedQuestionIndex) { _ in
                         withAnimation(.easeOut(duration: 0.15)) {
@@ -115,10 +145,12 @@ struct SwiftUIQuestionnaireDialog: View {
                         KeyboardHint(key: "⏎", label: "done")
                     ])
                     HStack(spacing: 10) {
-                        SwiftUIModernButton(title: "Cancel", isPrimary: false, action: onCancel)
-                        SwiftUIModernButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
+                        FocusableButton(title: "Cancel", isPrimary: false, action: onCancel)
+                            .frame(height: 48)
+                        FocusableButton(title: "Done", isPrimary: true, isDisabled: answeredCount == 0, showReturnHint: true, action: {
                             onComplete(answers)
                         })
+                        .frame(height: 48)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -129,7 +161,7 @@ struct SwiftUIQuestionnaireDialog: View {
     }
 
     private func toggleSelection(questionId: String, optionIndex: Int, multiSelect: Bool) {
-        var current = answers[questionId] ?? []
+        var current = selectedIndices(for: questionId)
         if multiSelect {
             if current.contains(optionIndex) {
                 current.remove(optionIndex)
@@ -139,50 +171,14 @@ struct SwiftUIQuestionnaireDialog: View {
         } else {
             current = [optionIndex]
         }
-        answers[questionId] = current
+        answers[questionId] = .choices(current)
     }
 
     private func handleKeyPress(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) -> Bool {
-        // ESC to cancel
-        if keyCode == 53 {
-            onCancel()
-            return true
-        }
-
-        guard let question = focusedQuestion else { return false }
-
+        // Navigation (Tab, arrows) and Space handled by FocusManager + focused views
         switch keyCode {
-        case 125: // Down arrow - next option or next question
-            if focusedOptionIndex < question.options.count - 1 {
-                focusedOptionIndex += 1
-            } else if focusedQuestionIndex < questions.count - 1 {
-                focusedQuestionIndex += 1
-                focusedOptionIndex = 0
-            }
-            return true
-        case 126: // Up arrow - previous option or previous question
-            if focusedOptionIndex > 0 {
-                focusedOptionIndex -= 1
-            } else if focusedQuestionIndex > 0 {
-                focusedQuestionIndex -= 1
-                focusedOptionIndex = questions[focusedQuestionIndex].options.count - 1
-            }
-            return true
-        case 49: // Space - toggle selection
-            toggleSelection(questionId: question.id, optionIndex: focusedOptionIndex, multiSelect: question.multiSelect)
-            return true
-        case 48: // Tab - next/previous question
-            if modifiers.contains(.shift) {
-                if focusedQuestionIndex > 0 {
-                    focusedQuestionIndex -= 1
-                    focusedOptionIndex = 0
-                }
-            } else {
-                if focusedQuestionIndex < questions.count - 1 {
-                    focusedQuestionIndex += 1
-                    focusedOptionIndex = 0
-                }
-            }
+        case 53: // ESC
+            onCancel()
             return true
         case 36: // Enter/Return - complete if any answers
             if answeredCount > 0 {
