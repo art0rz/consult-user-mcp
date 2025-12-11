@@ -3,10 +3,10 @@
   "private": true,
   "description": "Native macOS dialog system for MCP servers",
   "scripts": {
-    "build": "pnpm --filter mcp-server build",
+    "build": "cd mcp-server && bun run build",
     "build:cli": "swiftc -O -o dialog-cli/dialog-cli dialog-cli/dialog-cli.swift -framework AppKit -framework AVFoundation -framework UserNotifications",
     "build:app": "cd macos-app && swift build -c release",
-    "start": "pnpm --filter mcp-server start"
+    "start": "cd mcp-server && bun run start"
   },
   "workspaces": [
     "mcp-server"

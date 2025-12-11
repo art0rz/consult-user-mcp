@@ -27,7 +27,7 @@ Keep working while your AI agent runs autonomously. When it needs your input, a 
 ```bash
 git clone https://github.com/doublej/consult-user-mcp.git
 cd consult-user-mcp/mcp-server
-pnpm install && pnpm build
+bun install && bun run build
 ```
 
 Add to your MCP config:
@@ -67,8 +67,8 @@ Use the bundled MCP server:
 ## Build from Source
 
 ```bash
-pnpm install
-pnpm build
+bun install
+bun run build
 ```
 
 Creates `Consult User MCP.app` in project root (optional).
