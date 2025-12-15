@@ -28,7 +28,6 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: 6.6.3
-          modules: qtdeclarative qtquickcontrols qtshadertools
 
       - name: Build Qt dialog (install to AppDir)
         run: |
