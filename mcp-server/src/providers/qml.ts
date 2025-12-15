@@ -67,7 +67,12 @@ export class QmlDialogProvider implements DialogProvider {
     }
     const jsonArg = JSON.stringify(args);
     const { stdout } = await execFileAsync(CLI_PATH, [command, jsonArg], {
-      env: { ...process.env, MCP_CLIENT_NAME: this.clientName },
+      env: {
+        ...process.env,
+        MCP_CLIENT_NAME: this.clientName,
+        // Prefer xcb to avoid missing wayland plugin in bundled AppImage
+        QT_QPA_PLATFORM: process.env.QT_QPA_PLATFORM ?? "xcb",
+      },
     });
     return JSON.parse(stdout.trim()) as T;
   }
