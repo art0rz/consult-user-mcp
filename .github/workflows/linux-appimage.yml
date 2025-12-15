@@ -17,7 +17,8 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential ninja-build patchelf
+          # libxcb-cursor0 is required by libqxcb.so during linuxdeployqt bundling
+          sudo apt-get install -y build-essential ninja-build patchelf libxcb-cursor0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
