@@ -4,5 +4,8 @@
         <file>components/ConfirmDialog.qml</file>
         <file>components/ChooseDialog.qml</file>
         <file>components/TextInputDialog.qml</file>
+        <file>components/QuestionsDialog.qml</file>
+        <file>components/Toolbar.qml</file>
+        <file>components/ChoiceList.qml</file>
     </qresource>
 </RCC>

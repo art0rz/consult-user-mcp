@@ -59,6 +59,9 @@ export class QmlDialogProvider implements DialogProvider {
   }
 
   private async runCli<T>(command: string, args: object): Promise<T> {
+    if (!existsSync(CLI_PATH)) {
+      throw new Error(`QML dialog CLI not found at ${CLI_PATH}`);
+    }
     const jsonArg = JSON.stringify(args);
     const { stdout } = await execFileAsync(CLI_PATH, [command, jsonArg], {
       env: { ...process.env, MCP_CLIENT_NAME: this.clientName },

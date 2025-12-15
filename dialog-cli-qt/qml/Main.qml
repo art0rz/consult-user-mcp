@@ -1,12 +1,13 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "components"
 import QtQuick.Window 2.15
 
 Window {
     id: root
-    width: 440
-    height: 360
+    width: 520
+    height: 460
     visible: true
     title: cliPayload.title ? cliPayload.title : "Consult MCP"
     flags: Qt.Window | Qt.WindowStaysOnTopHint
@@ -31,15 +32,17 @@ Window {
         interval: root.timeoutMs
         running: true
         repeat: false
-        onTriggered: finish({ cancelled: true })
+        onTriggered: finish({ cancelled: true, dismissed: true })
     }
 
     onClosing: function() {
-        finish({ cancelled: true })
+        finish({ cancelled: true, dismissed: true })
     }
 
     function finish(obj) {
-        resultEmitter.emitJson(JSON.stringify(obj));
+        var payload = obj || {};
+        if (payload.cancelled === undefined) payload.cancelled = false;
+        resultEmitter.emitJson(JSON.stringify(payload));
     }
 
     function positionWindow() {
@@ -67,6 +70,8 @@ Window {
                 return chooseComponent
             case "textInput":
                 return textInputComponent
+            case "questions":
+                return questionsComponent
             default:
                 return fallbackComponent
             }
@@ -92,6 +97,14 @@ Window {
     Component {
         id: textInputComponent
         TextInputDialog {
+            payload: root.payload
+            onAnswered: function(obj) { finish(obj) }
+        }
+    }
+
+    Component {
+        id: questionsComponent
+        QuestionsDialog {
             payload: root.payload
             onAnswered: function(obj) { finish(obj) }
         }

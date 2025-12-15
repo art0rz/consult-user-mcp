@@ -1,9 +1,22 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "./"
 
 Rectangle {
     id: root
+    focus: true
+    Keys.onPressed: {
+        if (event.key === Qt.Key_S) {
+            toolbar.snoozeExpanded = !toolbar.snoozeExpanded;
+            toolbar.feedbackExpanded = false;
+            event.accepted = true;
+        } else if (event.key === Qt.Key_F) {
+            toolbar.feedbackExpanded = !toolbar.feedbackExpanded;
+            toolbar.snoozeExpanded = false;
+            event.accepted = true;
+        }
+    }
     anchors.fill: parent
     color: "#1c1c1e"
     radius: 10
@@ -28,6 +41,16 @@ Rectangle {
             font.pixelSize: 14
         }
 
+        Toolbar {
+            id: toolbar
+            Layout.fillWidth: true
+            onSnoozeRequested: function(minutes) {
+                answered({ text: null, cancelled: false, comment: null, snoozed: true, snoozeMinutes: minutes, instruction: "Set a timer for " + minutes + " minute" + (minutes === 1 ? "" : "s") + " and re-ask this question when it fires." })
+            }
+            onFeedbackSubmitted: function(text) {
+                answered({ text: null, cancelled: false, comment: null, feedbackText: text })
+            }
+        }
         TextField {
             id: inputField
             Layout.fillWidth: true

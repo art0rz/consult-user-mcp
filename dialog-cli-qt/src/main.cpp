@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QTextStream>
 #include <QVersionNumber>
+#include <QProcess>
 
 class ResultEmitter : public QObject {
     Q_OBJECT
@@ -22,6 +23,46 @@ static QJsonObject parseJsonArg(const QString &arg) {
         return QJsonObject{};
     }
     return doc.object();
+}
+
+static void writeJson(const QJsonObject &obj) {
+    QTextStream(stdout) << QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)) << "\n";
+}
+
+static bool runNotify(const QJsonObject &payload) {
+    const QString message = payload.value("message").toString();
+    if (message.isEmpty()) return false;
+
+    const QString title = payload.value("title").toString(QStringLiteral("Notice"));
+    const QString subtitle = payload.value("subtitle").toString();
+    const QString body = subtitle.isEmpty() ? message : (subtitle + "\n" + message);
+
+    const int code = QProcess::execute(QStringLiteral("notify-send"), { title, body });
+    return code == 0;
+}
+
+static bool runTts(const QJsonObject &payload) {
+    const QString text = payload.value("text").toString();
+    if (text.isEmpty()) return false;
+
+    const QString voice = payload.value("voice").toString();
+    const int rate = payload.value("rate").toInt(200);
+
+    QStringList spdArgs;
+    if (!voice.isEmpty()) spdArgs << "-v" << voice;
+    spdArgs << "-r" << QString::number(rate);
+    spdArgs << text;
+
+    int code = QProcess::execute(QStringLiteral("spd-say"), spdArgs);
+    if (code == 0) return true;
+
+    QStringList espeakArgs;
+    if (!voice.isEmpty()) espeakArgs << "-v" << voice;
+    espeakArgs << "-s" << QString::number(rate);
+    espeakArgs << text;
+
+    code = QProcess::execute(QStringLiteral("espeak"), espeakArgs);
+    return code == 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -42,6 +83,19 @@ int main(int argc, char *argv[]) {
     if (command == QLatin1String("pulse")) {
         QTextStream(stdout) << "{\"success\":true}" << "\n";
         return 0;
+    }
+
+    // Non-interactive commands handled in-process
+    if (command == QLatin1String("notify")) {
+        const bool ok = runNotify(payload);
+        writeJson(QJsonObject{{"success", ok}});
+        return ok ? 0 : 1;
+    }
+
+    if (command == QLatin1String("tts")) {
+        const bool ok = runTts(payload);
+        writeJson(QJsonObject{{"success", ok}});
+        return ok ? 0 : 1;
     }
 
     QQmlApplicationEngine engine;

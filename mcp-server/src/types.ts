@@ -14,6 +14,11 @@ export interface ConfirmResult {
   cancelled: boolean;
   response: string | null;
   comment: string | null;
+  snoozed?: boolean;
+  snoozeMinutes?: number;
+  feedbackText?: string;
+  instruction?: string;
+  dismissed?: boolean;
 }
 
 // Choice dialog result
@@ -23,6 +28,11 @@ export interface ChoiceResult {
   description: string | null;
   descriptions?: (string | null)[];
   comment: string | null;
+  snoozed?: boolean;
+  snoozeMinutes?: number;
+  feedbackText?: string;
+  instruction?: string;
+  dismissed?: boolean;
 }
 
 // Text input dialog result
@@ -30,6 +40,11 @@ export interface TextInputResult {
   text: string | null;
   cancelled: boolean;
   comment: string | null;
+  snoozed?: boolean;
+  snoozeMinutes?: number;
+  feedbackText?: string;
+  instruction?: string;
+  dismissed?: boolean;
 }
 
 // Notification result
@@ -108,4 +123,9 @@ export interface QuestionsResult {
   answers: Record<string, string | string[]>;
   cancelled: boolean;
   completedCount: number;
+  snoozed?: boolean;
+  snoozeMinutes?: number;
+  feedbackText?: string;
+  instruction?: string;
+  dismissed?: boolean;
 }

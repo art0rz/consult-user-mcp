@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Quick Qml)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Quick Qml QuickControls2)
 
 add_executable(consult-user-dialog
     src/main.cpp
@@ -15,7 +15,7 @@ add_executable(consult-user-dialog
 )
 
 target_link_libraries(consult-user-dialog
-    PRIVATE Qt6::Quick Qt6::Qml
+    PRIVATE Qt6::Quick Qt6::Qml Qt6::QuickControls2
 )
 
 install(TARGETS consult-user-dialog RUNTIME DESTINATION bin)
