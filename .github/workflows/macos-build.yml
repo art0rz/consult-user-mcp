@@ -1,0 +1,45 @@
+name: build-macos-bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.1.34"
+
+      - name: Build Swift dialog CLI
+        run: |
+          swift --version
+          cd dialog-cli
+          swift build -c release
+
+      - name: Build MCP server binary
+        run: |
+          cd mcp-server
+          bun install
+          bun run compile
+
+      - name: Package bundle
+        run: |
+          mkdir -p artifacts/macos
+          mkdir -p package/macos
+          cp mcp-server/bin/consult-user-mcp package/macos/
+          cp dialog-cli/.build/release/DialogCLI package/macos/
+          cp icon.svg package/macos/ || true
+          zip -r artifacts/macos/consult-user-mcp-macos.zip package/macos
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consult-user-mcp-macos.zip
+          path: artifacts/macos/consult-user-mcp-macos.zip
