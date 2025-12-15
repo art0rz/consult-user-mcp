@@ -69,7 +69,8 @@ jobs:
           cd dialog-cli-qt
           ./linuxdeployqt-continuous-x86_64.AppImage ${APPDIR}/usr/share/applications/consult-user-dialog.desktop             -appimage             -bundle-non-qt-libs             -qmldir=./qml             -verbose=2
           mkdir -p ${{ github.workspace }}/artifacts
-          mv *.AppImage ${{ github.workspace }}/artifacts/consult-user-mcp-linux-x86_64.AppImage
+          APPIMAGE=$(ls *.AppImage | head -n 1)
+          mv "$APPIMAGE" ${{ github.workspace }}/artifacts/consult-user-mcp-linux-x86_64.AppImage
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
