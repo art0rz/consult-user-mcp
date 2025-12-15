@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Consult User Dialog
-Exec=consult-user-dialog %f
+Exec=consult-user-mcp-launch %f
 Icon=consult-user-mcp
 Terminal=false
 Categories=Utility;
