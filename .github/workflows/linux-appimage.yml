@@ -32,8 +32,16 @@ jobs:
 
       - name: Build Qt dialog (install to AppDir)
         run: |
-          cmake -S dialog-cli-qt -B dialog-cli-qt/build -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_INSTALL_PREFIX=${APPDIR}/usr
+          cmake -S dialog-cli-qt -B dialog-cli-qt/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${APPDIR}/usr
           cmake --build dialog-cli-qt/build --target install
+
+      - name: Remove optional Qt SQL drivers with external deps
+        run: |
+          QT_PLUGIN_PATH=${Qt6_DIR}/plugins
+          rm -f ${QT_PLUGIN_PATH}/sqldrivers/libqsqlmimer.so || true
+          rm -f ${QT_PLUGIN_PATH}/sqldrivers/libqsqlmysql.so || true
 
       - name: Prepare AppDir desktop/icon
         run: |
