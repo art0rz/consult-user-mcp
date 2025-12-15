@@ -1,0 +1,70 @@
+name: build-linux-appimage
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      APPDIR: ${{ github.workspace }}/dialog-cli-qt/AppDir
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ninja-build patchelf
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.1.34"
+
+      - name: Setup Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: 6.6.3
+          modules: qtbase qtdeclarative qtquickcontrols2
+
+      - name: Build Qt dialog (install to AppDir)
+        run: |
+          cmake -S dialog-cli-qt -B dialog-cli-qt/build -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_INSTALL_PREFIX=${APPDIR}/usr
+          cmake --build dialog-cli-qt/build --target install
+
+      - name: Prepare AppDir desktop/icon
+        run: |
+          mkdir -p ${APPDIR}/usr/share/applications
+          mkdir -p ${APPDIR}/usr/share/icons/hicolor/scalable/apps
+          cp dialog-cli-qt/appimage/consult-user-dialog.desktop ${APPDIR}/usr/share/applications/consult-user-dialog.desktop
+          cp icon.svg ${APPDIR}/usr/share/icons/hicolor/scalable/apps/consult-user-mcp.svg
+
+      - name: Build MCP server binary
+        run: |
+          cd mcp-server
+          bun install
+          bun run compile
+          mkdir -p ${APPDIR}/usr/bin
+          cp bin/consult-user-mcp ${APPDIR}/usr/bin/consult-user-mcp
+
+      - name: Download linuxdeployqt
+        run: |
+          cd dialog-cli-qt
+          wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x linuxdeployqt-continuous-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          cd dialog-cli-qt
+          ./linuxdeployqt-continuous-x86_64.AppImage ${APPDIR}/usr/share/applications/consult-user-dialog.desktop             -appimage             -bundle-non-qt-libs             -qmldir=./qml             -verbose=2
+          mkdir -p ${{ github.workspace }}/artifacts
+          mv *.AppImage ${{ github.workspace }}/artifacts/consult-user-mcp-linux-x86_64.AppImage
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consult-user-mcp-linux-x86_64.AppImage
+          path: artifacts/consult-user-mcp-linux-x86_64.AppImage

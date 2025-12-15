@@ -28,6 +28,9 @@ function findDialogCli(): string {
   const execDir = dirname(process.execPath);
 
   const candidates = [
+    // AppImage/AppDir: binaries live in the same usr/bin directory
+    join(execDir, "consult-user-dialog"),
+    join(execDir, "..", "consult-user-dialog"),
     // Packaged bun binary inside AppImage/tarball: <binary>/dialog-cli-qt/bin/consult-user-dialog
     join(execDir, "dialog-cli-qt", "bin", "consult-user-dialog"),
     // Packaged in Resources (mirroring macOS layout for consistency)
