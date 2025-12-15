@@ -1,5 +1,6 @@
 import type { DialogProvider } from "./interface.js";
 import { SwiftDialogProvider } from "./swift.js";
+import { QmlDialogProvider } from "./qml.js";
 import type {
   ConfirmOptions,
   ConfirmResult,
@@ -63,12 +64,6 @@ class NotImplementedProvider implements DialogProvider {
 class PowerShellDialogProvider extends NotImplementedProvider {
   constructor() {
     super("Windows (PowerShell provider not implemented yet)");
-  }
-}
-
-class QmlDialogProvider extends NotImplementedProvider {
-  constructor() {
-    super("Linux (QML provider not implemented yet)");
   }
 }
 

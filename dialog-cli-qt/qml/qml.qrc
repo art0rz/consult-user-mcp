@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>Main.qml</file>
+        <file>components/ConfirmDialog.qml</file>
+        <file>components/ChooseDialog.qml</file>
+        <file>components/TextInputDialog.qml</file>
+    </qresource>
+</RCC>
