@@ -25,6 +25,11 @@ export interface DialogProvider {
   setClientName(name: string): void;
 
   /**
+   * Optional heartbeat to keep a platform helper app awake.
+   */
+  pulse?(): Promise<void> | void;
+
+  /**
    * Display a confirmation dialog with Yes/No buttons.
    */
   confirm(opts: ConfirmOptions): Promise<ConfirmResult>;

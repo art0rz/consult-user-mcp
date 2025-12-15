@@ -25,15 +25,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 function findDialogCli(): string {
-  // When inside app bundle: mcp-server/dist/providers -> ../dialog-cli/.build/release/DialogCLI
-  const appBundlePath = join(__dirname, "..", "..", "dialog-cli", ".build", "release", "DialogCLI");
-  if (existsSync(appBundlePath)) return appBundlePath;
+  const execDir = dirname(process.execPath);
 
-  // Dev: mcp-server/dist/providers -> ../../../dialog-cli/.build/release/DialogCLI
-  const devPath = join(__dirname, "..", "..", "..", "dialog-cli", ".build", "release", "DialogCLI");
-  if (existsSync(devPath)) return devPath;
+  const candidates = [
+    // Packaged bun binary inside macOS .app: Contents/MacOS/<binary> -> ../Resources/dialog-cli/DialogCLI
+    join(execDir, "..", "Resources", "dialog-cli", "DialogCLI"),
+    // Packaged side-by-side: <binary>/dialog-cli/DialogCLI
+    join(execDir, "dialog-cli", "DialogCLI"),
+    // App bundle when running via Node dist: mcp-server/dist/providers -> ../dialog-cli/.build/release/DialogCLI
+    join(__dirname, "..", "..", "dialog-cli", ".build", "release", "DialogCLI"),
+    // Dev: mcp-server/dist/providers -> ../../../dialog-cli/.build/release/DialogCLI
+    join(__dirname, "..", "..", "..", "dialog-cli", ".build", "release", "DialogCLI"),
+  ];
 
-  return devPath; // fallback
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  return candidates[candidates.length - 1]; // fallback to dev path
 }
 
 const CLI_PATH = findDialogCli();

@@ -1,11 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { SwiftDialogProvider } from "./providers/swift.js";
+import { createDialogProvider } from "./providers/platform.js";
 import type { DialogPosition, QuestionsMode } from "./types.js";
 
 const server = new McpServer({ name: "consult-user-mcp-server", version: "1.0.0" });
-const provider = new SwiftDialogProvider();
+const provider = createDialogProvider();
 const pos = z.enum(["left", "right", "center"]).default("left");
 
 server.registerTool("ask_confirmation", {
@@ -18,7 +18,7 @@ server.registerTool("ask_confirmation", {
     position: pos,
   }),
 }, async (p) => {
-  provider.pulse();
+  provider.pulse?.();
   const r = await provider.confirm({
     message: p.message, title: p.title ?? "Confirmation",
     confirmLabel: p.confirm_label ?? "Yes", cancelLabel: p.cancel_label ?? "No",
@@ -38,7 +38,7 @@ server.registerTool("ask_multiple_choice", {
     position: pos,
   }),
 }, async (p) => {
-  provider.pulse();
+  provider.pulse?.();
   const r = await provider.choose({
     prompt: p.prompt, choices: p.choices, descriptions: p.descriptions,
     allowMultiple: p.allow_multiple ?? true, defaultSelection: p.default_selection,
@@ -57,7 +57,7 @@ server.registerTool("ask_text_input", {
     position: pos,
   }),
 }, async (p) => {
-  provider.pulse();
+  provider.pulse?.();
   const r = await provider.textInput({
     prompt: p.prompt, title: p.title ?? "Input",
     defaultValue: p.default_value ?? "", hidden: p.hidden ?? false,
@@ -75,7 +75,7 @@ server.registerTool("notify_user", {
     sound: z.boolean().default(true),
   }),
 }, async (p) => {
-  provider.pulse();
+  provider.pulse?.();
   const r = await provider.notify({
     message: p.message, title: p.title ?? "Notice",
     subtitle: p.subtitle, sound: p.sound ?? true,
@@ -101,7 +101,7 @@ server.registerTool("ask_questions", {
     position: pos,
   }),
 }, async (p) => {
-  provider.pulse();
+  provider.pulse?.();
   const r = await provider.questions({
     questions: p.questions.map(q => ({
       id: q.id,
