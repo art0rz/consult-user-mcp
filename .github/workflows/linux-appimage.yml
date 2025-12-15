@@ -74,13 +74,16 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.Qt6_DIR }}/lib
         run: |
           cd dialog-cli-qt
-          export LD_LIBRARY_PATH="${Qt6_DIR}/lib:${Qt6_DIR}/gcc_64/lib:${LD_LIBRARY_PATH}"
-          export QT_PLUGIN_PATH="${Qt6_DIR}/plugins"
-          export QML2_IMPORT_PATH="${Qt6_DIR}/qml"
+          QT_PREFIX="${Qt6_DIR:-${HOME}/Qt/6.6.3/gcc_64}"
+          export LD_LIBRARY_PATH="${QT_PREFIX}/lib:${QT_PREFIX}/gcc_64/lib:${LD_LIBRARY_PATH}"
+          export QT_PLUGIN_PATH="${QT_PREFIX}/plugins"
+          export QML2_IMPORT_PATH="${QT_PREFIX}/qml"
           ./linuxdeployqt-continuous-x86_64.AppImage ${APPDIR}/usr/share/applications/consult-user-dialog.desktop \
             -appimage \
             -bundle-non-qt-libs \
             -qmldir=./qml \
+            -qmake=${QT_PREFIX}/bin/qmake \
+            -executable=${APPDIR}/usr/bin/consult-user-dialog \
             -verbose=2
           mkdir -p ${{ github.workspace }}/artifacts
           APPIMAGE=$(ls *.AppImage | head -n 1)
