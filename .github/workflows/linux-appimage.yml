@@ -61,15 +61,15 @@ jobs:
       - name: Add AppImage launcher
         run: |
           cat > ${APPDIR}/usr/bin/consult-user-mcp-launch <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
-APPDIR="${APPDIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
-# Prefer xcb to avoid missing wayland plugin on some hosts; users can override.
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
-export QT_PLUGIN_PATH="${APPDIR}/usr/plugins"
-export QML2_IMPORT_PATH="${APPDIR}/usr/qml"
-exec "${APPDIR}/usr/bin/consult-user-mcp" "$@"
-SH
+          #!/usr/bin/env bash
+          set -euo pipefail
+          APPDIR="${APPDIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+          # Prefer xcb to avoid missing wayland plugin on some hosts; users can override.
+          export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+          export QT_PLUGIN_PATH="${APPDIR}/usr/plugins"
+          export QML2_IMPORT_PATH="${APPDIR}/usr/qml"
+          exec "${APPDIR}/usr/bin/consult-user-mcp" "$@"
+          SH
           chmod +x ${APPDIR}/usr/bin/consult-user-mcp-launch
 
       - name: Download linuxdeployqt
